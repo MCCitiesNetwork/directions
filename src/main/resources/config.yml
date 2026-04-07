@@ -1,0 +1,24 @@
+transfer-penalty: 50
+max-walking-distance: 150
+# Suggested range: 0-10 (blocks). Applies to configured stops only.
+stop-arrival-buffer: 5
+# Suggested range: 5-40 depending on speed/vehicle usage.
+next-stop-notify-distance: 15
+# Suggested range: 3-15. Prevents instant chained stop advancement.
+departure-clearance-radius: 5
+bossbar-format: "Next: <stop>  <remaining>m"
+
+# strict: allow walking between any nearby stops
+# shared-mode-only: only allow walking edges when both stops share bus/train mode
+walking-transfer-policy: shared-mode-only
+
+# Demo network:
+# - Replace these IDs with your own WorldGuard region IDs.
+# - Keep at least one line with one or more stops.
+lines:
+  demo_bus_line:
+    type: bus
+    stops: [demo-bus-town-square, demo-bus-market, demo-bus-harbor]
+  demo_metro_line:
+    type: train
+    stops: [demo-train-central, demo-train-park, demo-train-harbor]

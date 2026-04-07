@@ -1,0 +1,11 @@
+line-display-names:
+  demo_bus_line: Demo Bus Line
+  demo_metro_line: Demo Metro Line
+
+stop-display-names:
+  demo-bus-town-square: Town Square Bus Stop
+  demo-bus-market: Market Bus Stop
+  demo-bus-harbor: Harbor Bus Stop
+  demo-train-central: Central Station
+  demo-train-park: Park Station
+  demo-train-harbor: Harbor Station

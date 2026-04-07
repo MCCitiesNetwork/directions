@@ -1,0 +1,20 @@
+name: Directions
+version: ${version}
+main: com.minecraftcitiesnetwork.directions.DirectionsPlugin
+api-version: "1.21"
+description: Transit directions between WorldGuard regions
+authors: [MinecraftCitiesNetwork]
+
+dependencies:
+  server:
+    WorldGuard:
+      required: true
+      load: BEFORE
+
+permissions:
+  directions.use:
+    description: Use the /directions command
+    default: true
+  directions.reload:
+    description: Reload directions config
+    default: op

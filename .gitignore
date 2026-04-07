@@ -1,0 +1,29 @@
+.gradle/
+build/
+out/
+
+# IntelliJ / IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# JVM crash logs
+hs_err_pid*
+replay_pid*
+
+# Optional local env files
+.env
+
+# workspace files
+.code-workspace

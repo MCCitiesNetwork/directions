@@ -1,0 +1,37 @@
+prefix: "<#00aaff><bold>DIRECTIONS</bold> <dark_grey>»</dark_grey> "
+
+command:
+  reloaded: "<prefix><green>Directions config reloaded."
+  stopped: "<prefix><green>Directions navigation stopped."
+  started-header: "<prefix><white>Here is how to get to <green><destination></green>!"
+  started-navigation: "<prefix><white>Navigation started."
+  usage: "<prefix><red>Usage: /directions start <region> | /directions stop | /directions reload"
+  only-player: "<prefix><red>Only players can run this command."
+  no-permission: "<prefix><red>You do not have permission."
+
+errors:
+  region-manager-unavailable: "<prefix><red>WorldGuard region manager is unavailable for this world."
+  region-not-found: "<prefix><red><region> is not a valid destination in this world."
+  already-in-region: "<prefix><green>You are already in <region>."
+  destination-unavailable: "<prefix><red>Destination parent/target region is unavailable."
+  no-stops-in-world: "<prefix><red>No stops are available in this world."
+  no-destination-stop: "<prefix><red>No destination-side stop found in this world."
+  no-route: "<prefix><red>No route found to <region>."
+
+directions:
+  direct-walk: "<white>  <step>. Walk directly to <green><destination></green> <grey>(<distance> blocks <direction>)</grey>."
+  walk-to-stop: "<white>  <step>. Walk to <green><to></green> <grey>(<hint>)</grey>."
+  take-line: "<white>  <step>. Take <aqua><line></aqua> from <green><from></green> to <green><to></green>."
+  walk-between-stops: "<white>  <step>. Walk from <green><from></green> to <green><to></green>."
+  walk-to-destination: "<white>  <step>. Walk to <green><destination></green> from <green><from></green>."
+  warn-start-fallback: "<yellow>  ⚠ No nearby starting stop found; using nearest stop."
+  warn-destination-fallback: "<yellow>  ⚠ Destination has no nearby stop; using nearest stop."
+
+navigation:
+  next-stop: "<prefix><white>Next stop: <green><stop></green>"
+  next-stop-with-line: "<prefix><white>Next stop: <green><stop></green> <gray>(<line>)</gray>"
+  upcoming-next-stop: "<prefix><white>Get ready. Next stop to catch: <green><stop></green>"
+  upcoming-next-stop-with-line: "<prefix><white>Get ready. Next stop to catch: <green><stop></green> <gray>(<line>)</gray>"
+  next-destination: "<prefix><white>Now walk to <green><stop></green>."
+  upcoming-destination: "<prefix><white>Get ready to walk to <green><stop></green>."
+  arrived: "<prefix><green>You have arrived at <destination>."
