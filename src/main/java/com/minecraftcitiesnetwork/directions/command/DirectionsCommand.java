@@ -41,21 +41,21 @@ public class DirectionsCommand {
     }
 
     public void sendUsage(CommandSender sender) {
-        lang.send(sender, "command.usage", lang.pRaw("prefix", lang.raw("prefix")));
+        lang.send(sender, "command.usage", lang.placeholderRaw("prefix", lang.raw("prefix")));
     }
 
     public void sendOnlyPlayer(CommandSender sender) {
-        lang.send(sender, "command.only-player", lang.pRaw("prefix", lang.raw("prefix")));
+        lang.send(sender, "command.only-player", lang.placeholderRaw("prefix", lang.raw("prefix")));
     }
 
     public void reload(CommandSender sender) {
         plugin.reloadDirectionsData();
-        lang.send(sender, "command.reloaded", lang.pRaw("prefix", lang.raw("prefix")));
+        lang.send(sender, "command.reloaded", lang.placeholderRaw("prefix", lang.raw("prefix")));
     }
 
     public void stop(Player player) {
         plugin.getNavigationService().stopNavigation(player);
-        lang.send(player, "command.stopped", lang.pRaw("prefix", lang.raw("prefix")));
+        lang.send(player, "command.stopped", lang.placeholderRaw("prefix", lang.raw("prefix")));
     }
 
     public void start(Player player, String targetIdRaw) {
@@ -68,30 +68,30 @@ public class DirectionsCommand {
         ProtectedRegion target = regionManager.getRegion(targetId);
         if (target == null) {
             lang.send(player, "errors.region-not-found",
-                    lang.pRaw("prefix", lang.raw("prefix")),
-                    lang.p("region", targetId));
+                    lang.placeholderRaw("prefix", lang.raw("prefix")),
+                    lang.placeholder("region", targetId));
             return;
         }
 
         String displayName = displayDestination(targetId);
         lang.send(player, "command.started-header",
-                lang.pRaw("prefix", lang.raw("prefix")),
-                lang.p("destination", displayName));
+                lang.placeholderRaw("prefix", lang.raw("prefix")),
+                lang.placeholder("destination", displayName));
 
         if (regionManager.getApplicableRegions(BukkitAdapter.asBlockVector(player.getLocation()))
                 .getRegions()
                 .stream()
                 .anyMatch(r -> r.getId().equalsIgnoreCase(targetId))) {
             lang.send(player, "errors.already-in-region",
-                    lang.pRaw("prefix", lang.raw("prefix")),
-                    lang.p("region", displayStop(targetId)));
+                    lang.placeholderRaw("prefix", lang.raw("prefix")),
+                    lang.placeholder("region", displayStop(targetId)));
             return;
         }
 
         DestinationResolver.Destination destination = destinationResolver.resolve(target);
         ProtectedRegion navRegion = regionManager.getRegion(destination.navigationRegionId());
         if (navRegion == null) {
-            lang.send(player, "errors.destination-unavailable", lang.pRaw("prefix", lang.raw("prefix")));
+            lang.send(player, "errors.destination-unavailable", lang.placeholderRaw("prefix", lang.raw("prefix")));
             return;
         }
 
@@ -111,7 +111,7 @@ public class DirectionsCommand {
 
     private void startAt(Player player, double x, double y, double z, boolean includeY) {
         if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
-            lang.send(player, "errors.invalid-coordinates", lang.pRaw("prefix", lang.raw("prefix")));
+            lang.send(player, "errors.invalid-coordinates", lang.placeholderRaw("prefix", lang.raw("prefix")));
             return;
         }
 
@@ -123,14 +123,14 @@ public class DirectionsCommand {
         Waypoint.Coordinates destination = new Waypoint.Coordinates(x, y, z, includeY);
         String displayName = destination.displayLabel(plugin.getLoadedData());
         lang.send(player, "command.started-header",
-                lang.pRaw("prefix", lang.raw("prefix")),
-                lang.p("destination", displayName));
+                lang.placeholderRaw("prefix", lang.raw("prefix")),
+                lang.placeholder("destination", displayName));
 
         double arrivalRadius = plugin.getLoadedData().coordinateArrivalRadius();
         if (destination.isWithinRadius(player.getLocation(), arrivalRadius)) {
             lang.send(player, "errors.already-at-coordinates",
-                    lang.pRaw("prefix", lang.raw("prefix")),
-                    lang.p("destination", displayName));
+                    lang.placeholderRaw("prefix", lang.raw("prefix")),
+                    lang.placeholder("destination", displayName));
             return;
         }
 
@@ -150,7 +150,7 @@ public class DirectionsCommand {
         PlayerPositionResolver.StartResolution startResolution =
                 playerPositionResolver.resolve(player, regionManager, graph);
         if (startResolution.startEdges().isEmpty()) {
-            lang.send(player, "errors.no-stops-in-world", lang.pRaw("prefix", lang.raw("prefix")));
+            lang.send(player, "errors.no-stops-in-world", lang.placeholderRaw("prefix", lang.raw("prefix")));
             return;
         }
 
@@ -160,7 +160,7 @@ public class DirectionsCommand {
             nearDestination = graph.nearestStops(destX, destZ, player.getWorld().getName(), 1);
         }
         if (nearDestination.isEmpty()) {
-            lang.send(player, "errors.no-destination-stop", lang.pRaw("prefix", lang.raw("prefix")));
+            lang.send(player, "errors.no-destination-stop", lang.placeholderRaw("prefix", lang.raw("prefix")));
             return;
         }
 
@@ -182,8 +182,8 @@ public class DirectionsCommand {
         );
         if (route.pathNodes().isEmpty()) {
             lang.send(player, "errors.no-route",
-                    lang.pRaw("prefix", lang.raw("prefix")),
-                    lang.p("region", destinationName));
+                    lang.placeholderRaw("prefix", lang.raw("prefix")),
+                    lang.placeholder("region", destinationName));
             return;
         }
 
@@ -203,7 +203,7 @@ public class DirectionsCommand {
         RegionManager regionManager = WorldGuard.getInstance().getPlatform().getRegionContainer()
                 .get(BukkitAdapter.adapt(player.getWorld()));
         if (regionManager == null) {
-            lang.send(player, "errors.region-manager-unavailable", lang.pRaw("prefix", lang.raw("prefix")));
+            lang.send(player, "errors.region-manager-unavailable", lang.placeholderRaw("prefix", lang.raw("prefix")));
         }
         return regionManager;
     }
@@ -222,16 +222,16 @@ public class DirectionsCommand {
 
             if (from.equals(START_NODE)) {
                 steps.add(new Step("directions.walk-to-stop",
-                        lang.p("to", displayStop(to)),
-                        lang.p("hint", directionHint(player.getLocation(), graph.getStopsById().get(to)))));
+                        lang.placeholder("to", displayStop(to)),
+                        lang.placeholder("hint", directionHint(player.getLocation(), graph.getStopsById().get(to)))));
                 continue;
             }
             if (to.equals(DEST_NODE)) {
                 Stop stop = graph.getStopsById().get(from);
                 if (stop != null) {
                     steps.add(new Step("directions.walk-to-destination",
-                            lang.p("from", displayStop(stop.regionId())),
-                            lang.p("destination", destinationName)));
+                            lang.placeholder("from", displayStop(stop.regionId())),
+                            lang.placeholder("destination", destinationName)));
                 }
                 continue;
             }
@@ -245,19 +245,19 @@ public class DirectionsCommand {
                         .sorted()
                         .collect(Collectors.joining(", "));
                 steps.add(new Step("directions.take-line",
-                        lang.p("line", lineText),
-                        lang.p("from", displayStop(from)),
-                        lang.p("to", displayStop(to))));
+                        lang.placeholder("line", lineText),
+                        lang.placeholder("from", displayStop(from)),
+                        lang.placeholder("to", displayStop(to))));
             } else {
                 steps.add(new Step("directions.walk-between-stops",
-                        lang.p("from", displayStop(from)),
-                        lang.p("to", displayStop(to))));
+                        lang.placeholder("from", displayStop(from)),
+                        lang.placeholder("to", displayStop(to))));
             }
         }
 
         int n = 1;
         for (Step step : steps) {
-            TagResolver[] withStep = prepend(step.placeholders(), lang.p("step", String.valueOf(n)));
+            TagResolver[] withStep = prepend(step.placeholders(), lang.placeholder("step", String.valueOf(n)));
             lang.send(player, step.key(), withStep);
             n++;
         }
@@ -315,10 +315,10 @@ public class DirectionsCommand {
         double dz = toZ - from.getZ();
         double blocks = Math.sqrt(dx * dx + dz * dz);
         lang.send(player, "directions.direct-walk",
-                lang.p("step", "1"),
-                lang.p("destination", destinationName),
-                lang.p("distance", String.valueOf(Math.round(blocks))),
-                lang.p("direction", cardinalFromDelta(dx, dz)));
+                lang.placeholder("step", "1"),
+                lang.placeholder("destination", destinationName),
+                lang.placeholder("distance", String.valueOf(Math.round(blocks))),
+                lang.placeholder("direction", cardinalFromDelta(dx, dz)));
     }
 
     private static TagResolver[] prepend(TagResolver[] rest, TagResolver first) {

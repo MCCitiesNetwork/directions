@@ -20,20 +20,21 @@ final class ArrivalPolicy {
             double coordinateArrivalRadius,
             double departureClearanceRadius
     ) {
-        if (waypoint instanceof Waypoint.Coordinates coords) {
-            if (!isWithinCoordinateRadius(player.getLocation(), coords, coordinateArrivalRadius)) {
-                return false;
+        return switch (waypoint) {
+            case Waypoint.Coordinates coords -> {
+                if (!isWithinCoordinateRadius(player.getLocation(), coords, coordinateArrivalRadius)) {
+                    yield false;
+                }
+                yield isClearOfPreviousWaypoint(session, player, regionManager, departureClearanceRadius);
             }
-            return isClearOfPreviousWaypoint(session, player, regionManager, departureClearanceRadius);
-        }
-        if (waypoint instanceof Waypoint.Region region) {
-            double buffer = isConfiguredStop ? stopArrivalBuffer : 0.0;
-            if (!isInsideRegion(player, regionManager, region.id(), buffer)) {
-                return false;
+            case Waypoint.Region region -> {
+                double buffer = isConfiguredStop ? stopArrivalBuffer : 0.0;
+                if (!isInsideRegion(player, regionManager, region.id(), buffer)) {
+                    yield false;
+                }
+                yield isClearOfPreviousWaypoint(session, player, regionManager, departureClearanceRadius);
             }
-            return isClearOfPreviousWaypoint(session, player, regionManager, departureClearanceRadius);
-        }
-        return false;
+        };
     }
 
     static boolean isInsideRegion(Player player, RegionManager regionManager, String regionId, double buffer) {
@@ -114,16 +115,16 @@ final class ArrivalPolicy {
             return true;
         }
         double clearanceSq = departureClearanceRadius * departureClearanceRadius;
-        if (previous instanceof Waypoint.Region region) {
-            ProtectedRegion previousRegion = regionManager.getRegion(region.id());
-            if (previousRegion == null) {
-                return true;
+        return switch (previous) {
+            case Waypoint.Region region -> {
+                ProtectedRegion previousRegion = regionManager.getRegion(region.id());
+                if (previousRegion == null) {
+                    yield true;
+                }
+                yield distanceSquaredToRegion(player.getLocation(), previousRegion, false) > clearanceSq;
             }
-            return distanceSquaredToRegion(player.getLocation(), previousRegion, false) > clearanceSq;
-        }
-        if (previous instanceof Waypoint.Coordinates coords) {
-            return distanceSquaredToCoordinate(player.getLocation(), coords) > clearanceSq;
-        }
-        return true;
+            case Waypoint.Coordinates coords ->
+                    distanceSquaredToCoordinate(player.getLocation(), coords) > clearanceSq;
+        };
     }
 }
