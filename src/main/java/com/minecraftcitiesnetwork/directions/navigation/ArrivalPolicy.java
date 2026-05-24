@@ -14,16 +14,26 @@ final class ArrivalPolicy {
             SessionView session,
             Player player,
             RegionManager regionManager,
-            String waypointRegionId,
+            Waypoint waypoint,
             boolean isConfiguredStop,
             double stopArrivalBuffer,
+            double coordinateArrivalRadius,
             double departureClearanceRadius
     ) {
-        double buffer = isConfiguredStop ? stopArrivalBuffer : 0.0;
-        if (!isInsideRegion(player, regionManager, waypointRegionId, buffer)) {
-            return false;
+        if (waypoint instanceof Waypoint.Coordinates coords) {
+            if (!isWithinCoordinateRadius(player.getLocation(), coords, coordinateArrivalRadius)) {
+                return false;
+            }
+            return isClearOfPreviousWaypoint(session, player, regionManager, departureClearanceRadius);
         }
-        return isClearOfPreviousStop(session, player, regionManager, departureClearanceRadius);
+        if (waypoint instanceof Waypoint.Region region) {
+            double buffer = isConfiguredStop ? stopArrivalBuffer : 0.0;
+            if (!isInsideRegion(player, regionManager, region.id(), buffer)) {
+                return false;
+            }
+            return isClearOfPreviousWaypoint(session, player, regionManager, departureClearanceRadius);
+        }
+        return false;
     }
 
     static boolean isInsideRegion(Player player, RegionManager regionManager, String regionId, double buffer) {
@@ -68,6 +78,18 @@ final class ArrivalPolicy {
                 : (dx * dx + dz * dz);
     }
 
+    static double distanceToCoordinate(Location from, Waypoint.Coordinates target) {
+        return Math.sqrt(distanceSquaredToCoordinate(from, target));
+    }
+
+    static double distanceSquaredToCoordinate(Location from, Waypoint.Coordinates target) {
+        return target.distanceSquared(from);
+    }
+
+    static boolean isWithinCoordinateRadius(Location from, Waypoint.Coordinates target, double radius) {
+        return target.isWithinRadius(from, radius);
+    }
+
     private static double axisDistance(double value, double min, double max) {
         if (value < min) {
             return min - value;
@@ -78,24 +100,30 @@ final class ArrivalPolicy {
         return 0.0;
     }
 
-    static boolean isClearOfPreviousStop(
+    static boolean isClearOfPreviousWaypoint(
             SessionView session,
             Player player,
             RegionManager regionManager,
             double departureClearanceRadius
     ) {
-        String previous = session.previousWaypoint();
+        Waypoint previous = session.previousWaypoint();
         if (previous == null) {
-            return true;
-        }
-        ProtectedRegion previousRegion = regionManager.getRegion(previous);
-        if (previousRegion == null) {
             return true;
         }
         if (departureClearanceRadius <= 0.0) {
             return true;
         }
         double clearanceSq = departureClearanceRadius * departureClearanceRadius;
-        return distanceSquaredToRegion(player.getLocation(), previousRegion, false) > clearanceSq;
+        if (previous instanceof Waypoint.Region region) {
+            ProtectedRegion previousRegion = regionManager.getRegion(region.id());
+            if (previousRegion == null) {
+                return true;
+            }
+            return distanceSquaredToRegion(player.getLocation(), previousRegion, false) > clearanceSq;
+        }
+        if (previous instanceof Waypoint.Coordinates coords) {
+            return distanceSquaredToCoordinate(player.getLocation(), coords) > clearanceSq;
+        }
+        return true;
     }
 }

@@ -9,6 +9,7 @@ import com.minecraftcitiesnetwork.directions.graph.TransitGraph;
 import com.minecraftcitiesnetwork.directions.i18n.LangService;
 import com.minecraftcitiesnetwork.directions.model.RouteResult;
 import com.minecraftcitiesnetwork.directions.model.Stop;
+import com.minecraftcitiesnetwork.directions.navigation.Waypoint;
 import com.minecraftcitiesnetwork.directions.resolver.DestinationResolver;
 import com.minecraftcitiesnetwork.directions.resolver.PlayerPositionResolver;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
@@ -59,11 +60,8 @@ public class DirectionsCommand {
 
     public void start(Player player, String targetIdRaw) {
         String targetId = targetIdRaw.toLowerCase(Locale.ROOT);
-        TransitGraph graph = plugin.getTransitGraph();
-        RegionManager regionManager = WorldGuard.getInstance().getPlatform().getRegionContainer()
-                .get(BukkitAdapter.adapt(player.getWorld()));
+        RegionManager regionManager = regionManager(player);
         if (regionManager == null) {
-            lang.send(player, "errors.region-manager-unavailable", lang.pRaw("prefix", lang.raw("prefix")));
             return;
         }
 
@@ -75,9 +73,10 @@ public class DirectionsCommand {
             return;
         }
 
+        String displayName = displayDestination(targetId);
         lang.send(player, "command.started-header",
                 lang.pRaw("prefix", lang.raw("prefix")),
-                lang.p("destination", displayDestination(targetId)));
+                lang.p("destination", displayName));
 
         if (regionManager.getApplicableRegions(BukkitAdapter.asBlockVector(player.getLocation()))
                 .getRegions()
@@ -90,13 +89,63 @@ public class DirectionsCommand {
         }
 
         DestinationResolver.Destination destination = destinationResolver.resolve(target);
-        // Routing anchor may use a parent region centroid for transit stop lookup,
-        // but navigation completion must always target the originally requested region.
         ProtectedRegion navRegion = regionManager.getRegion(destination.navigationRegionId());
         if (navRegion == null) {
             lang.send(player, "errors.destination-unavailable", lang.pRaw("prefix", lang.raw("prefix")));
             return;
         }
+
+        double destX = (navRegion.getMinimumPoint().x() + navRegion.getMaximumPoint().x()) / 2.0;
+        double destZ = (navRegion.getMinimumPoint().z() + navRegion.getMaximumPoint().z()) / 2.0;
+        Waypoint finalWaypoint = new Waypoint.Region(destination.requestedRegionId());
+        routeAndNavigate(player, regionManager, destX, destZ, displayName, finalWaypoint);
+    }
+
+    public void startAt(Player player, double x, double z) {
+        startAt(player, x, player.getLocation().getY(), z, false);
+    }
+
+    public void startAt(Player player, double x, double y, double z) {
+        startAt(player, x, y, z, true);
+    }
+
+    private void startAt(Player player, double x, double y, double z, boolean includeY) {
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
+            lang.send(player, "errors.invalid-coordinates", lang.pRaw("prefix", lang.raw("prefix")));
+            return;
+        }
+
+        RegionManager regionManager = regionManager(player);
+        if (regionManager == null) {
+            return;
+        }
+
+        Waypoint.Coordinates destination = new Waypoint.Coordinates(x, y, z, includeY);
+        String displayName = destination.displayLabel(plugin.getLoadedData());
+        lang.send(player, "command.started-header",
+                lang.pRaw("prefix", lang.raw("prefix")),
+                lang.p("destination", displayName));
+
+        double arrivalRadius = plugin.getLoadedData().coordinateArrivalRadius();
+        if (destination.isWithinRadius(player.getLocation(), arrivalRadius)) {
+            lang.send(player, "errors.already-at-coordinates",
+                    lang.pRaw("prefix", lang.raw("prefix")),
+                    lang.p("destination", displayName));
+            return;
+        }
+
+        routeAndNavigate(player, regionManager, x, z, displayName, destination);
+    }
+
+    private void routeAndNavigate(
+            Player player,
+            RegionManager regionManager,
+            double destX,
+            double destZ,
+            String destinationName,
+            Waypoint finalWaypoint
+    ) {
+        TransitGraph graph = plugin.getTransitGraph();
 
         PlayerPositionResolver.StartResolution startResolution =
                 playerPositionResolver.resolve(player, regionManager, graph);
@@ -105,8 +154,6 @@ public class DirectionsCommand {
             return;
         }
 
-        double destX = (navRegion.getMinimumPoint().x() + navRegion.getMaximumPoint().x()) / 2.0;
-        double destZ = (navRegion.getMinimumPoint().z() + navRegion.getMaximumPoint().z()) / 2.0;
         List<TransitGraph.StopDistance> nearDestination = graph.stopsWithinDistance(destX, destZ, player.getWorld().getName());
         boolean destinationFallback = nearDestination.isEmpty();
         if (destinationFallback) {
@@ -136,21 +183,29 @@ public class DirectionsCommand {
         if (route.pathNodes().isEmpty()) {
             lang.send(player, "errors.no-route",
                     lang.pRaw("prefix", lang.raw("prefix")),
-                    lang.p("region", displayDestination(targetId)));
+                    lang.p("region", destinationName));
             return;
         }
+
+        List<Waypoint> navWaypoints = buildWaypoints(route.pathNodes(), finalWaypoint);
 
         if (!hasTransitHop(route.pathNodes(), graph)) {
-            sendDirectWalk(player, playerLoc, destX, destZ, displayDestination(targetId));
-            plugin.getNavigationService().startNavigation(player, List.of(destination.requestedRegionId()));
+            sendDirectWalk(player, playerLoc, destX, destZ, destinationName);
+            plugin.getNavigationService().startNavigation(player, List.of(finalWaypoint));
             return;
         }
 
-        plugin.getNavigationService().startNavigation(
-                player,
-                buildWaypointRegions(route.pathNodes(), destination.requestedRegionId())
-        );
-        sendRoute(player, route.pathNodes(), graph, startResolution.fallbackUsed(), destinationFallback, displayDestination(targetId));
+        plugin.getNavigationService().startNavigation(player, navWaypoints);
+        sendRoute(player, route.pathNodes(), graph, startResolution.fallbackUsed(), destinationFallback, destinationName);
+    }
+
+    private RegionManager regionManager(Player player) {
+        RegionManager regionManager = WorldGuard.getInstance().getPlatform().getRegionContainer()
+                .get(BukkitAdapter.adapt(player.getWorld()));
+        if (regionManager == null) {
+            lang.send(player, "errors.region-manager-unavailable", lang.pRaw("prefix", lang.raw("prefix")));
+        }
+        return regionManager;
     }
 
     private void sendRoute(Player player,
@@ -280,17 +335,18 @@ public class DirectionsCommand {
         return suggestionService;
     }
 
-    private static List<String> buildWaypointRegions(List<String> pathNodes, String destinationRegionId) {
-        List<String> waypoints = new ArrayList<>();
+    private static List<Waypoint> buildWaypoints(List<String> pathNodes, Waypoint finalWaypoint) {
+        List<Waypoint> waypoints = new ArrayList<>();
         for (String node : pathNodes) {
             if (node.equals(START_NODE) || node.equals(DEST_NODE)) {
                 continue;
             }
-            waypoints.add(node);
+            waypoints.add(new Waypoint.Region(node));
         }
-        if (waypoints.isEmpty() || !waypoints.getLast().equalsIgnoreCase(destinationRegionId)) {
-            waypoints.add(destinationRegionId);
+        if (waypoints.isEmpty() || !waypoints.getLast().equals(finalWaypoint)) {
+            waypoints.add(finalWaypoint);
         }
         return waypoints;
     }
+
 }

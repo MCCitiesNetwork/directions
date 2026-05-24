@@ -11,14 +11,14 @@ import java.util.UUID;
 final class Session implements SessionView {
     private final DirectionsPlugin plugin;
     private final UUID playerId;
-    private final List<String> waypoints;
+    private final List<Waypoint> waypoints;
     private int index;
     private final List<ArmorStand> arrowStands;
     private final BossBar bossBar;
     private double legStartDistance;
     private int upcomingHintSentForIndex;
 
-    Session(DirectionsPlugin plugin, UUID playerId, List<String> waypoints, int index, List<ArmorStand> arrowStands, BossBar bossBar) {
+    Session(DirectionsPlugin plugin, UUID playerId, List<Waypoint> waypoints, int index, List<ArmorStand> arrowStands, BossBar bossBar) {
         this.plugin = plugin;
         this.playerId = playerId;
         this.waypoints = waypoints;
@@ -69,14 +69,14 @@ final class Session implements SessionView {
         this.upcomingHintSentForIndex = idx;
     }
 
-    @Nullable String currentWaypoint() {
+    @Nullable Waypoint currentWaypoint() {
         if (index < 0 || index >= waypoints.size()) {
             return null;
         }
         return waypoints.get(index);
     }
 
-    @Nullable String nextWaypoint() {
+    @Nullable Waypoint nextWaypoint() {
         int nextIdx = index + 1;
         if (nextIdx < 0 || nextIdx >= waypoints.size()) {
             return null;
@@ -84,7 +84,7 @@ final class Session implements SessionView {
         return waypoints.get(nextIdx);
     }
 
-    @Nullable String nextWaypointAfterNext() {
+    @Nullable Waypoint nextWaypointAfterNext() {
         int idx = index + 2;
         if (idx < 0 || idx >= waypoints.size()) {
             return null;
@@ -93,7 +93,7 @@ final class Session implements SessionView {
     }
 
     @Override
-    public @Nullable String previousWaypoint() {
+    public @Nullable Waypoint previousWaypoint() {
         int prevIdx = index - 1;
         if (prevIdx < 0 || prevIdx >= waypoints.size()) {
             return null;

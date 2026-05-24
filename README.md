@@ -3,7 +3,9 @@
 Transit directions for Paper Minecraft servers, using WorldGuard regions as stops and destinations.
 
 ## Commands
-- `/directions start <region>` - start directions
+- `/directions start <region>` - start directions to a WorldGuard region
+- `/directions start at <x> <z>` - start directions to map coordinates (uses your current Y for navigation)
+- `/directions start at <x> <y> <z>` - start directions to exact coordinates
 - `/directions stop` - stops active navigation
 - `/directions reload` - reload configuration files (requires `directions.reload`)
 
@@ -13,6 +15,7 @@ Transit directions for Paper Minecraft servers, using WorldGuard regions as stop
 - `stop-arrival-buffer`: 2D buffer for configured stops only
 - `next-stop-notify-distance`: when to emit "get ready" messages
 - `departure-clearance-radius`: distance required from previous stop before advancing
+- `coordinate-arrival-radius`: distance to a coordinate destination before navigation completes
 - `bossbar-format`: bossbar text template (`<stop>`, `<remaining>`)
 - `walking-transfer-policy`:
   - `shared-mode-only` (recommended)

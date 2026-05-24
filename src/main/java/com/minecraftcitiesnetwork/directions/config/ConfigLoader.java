@@ -50,6 +50,7 @@ public class ConfigLoader {
             double stopArrivalBuffer = root.stopArrivalBuffer;
             double nextStopNotifyDistance = root.nextStopNotifyDistance;
             double departureClearanceRadius = root.departureClearanceRadius;
+            double coordinateArrivalRadius = root.coordinateArrivalRadius;
             String bossbarFormat = root.bossbarFormat;
             if (bossbarFormat == null || bossbarFormat.isBlank()) {
                 bossbarFormat = "Next: <stop>  <remaining>m";
@@ -68,6 +69,9 @@ public class ConfigLoader {
             }
             if (departureClearanceRadius < 0) {
                 throw new IllegalStateException("departure-clearance-radius must be >= 0");
+            }
+            if (coordinateArrivalRadius < 0) {
+                throw new IllegalStateException("coordinate-arrival-radius must be >= 0");
             }
             String walkingTransferPolicy = root.walkingTransferPolicy;
             if (walkingTransferPolicy == null || walkingTransferPolicy.isBlank()) {
@@ -135,6 +139,7 @@ public class ConfigLoader {
                     stopArrivalBuffer,
                     nextStopNotifyDistance,
                     departureClearanceRadius,
+                    coordinateArrivalRadius,
                     bossbarFormat,
                     walkingTransferPolicy,
                     lineDisplayNames,
@@ -203,6 +208,7 @@ public class ConfigLoader {
                              double stopArrivalBuffer,
                              double nextStopNotifyDistance,
                              double departureClearanceRadius,
+                             double coordinateArrivalRadius,
                              String bossbarFormat,
                              String walkingTransferPolicy,
                              Map<String, String> lineDisplayNames,
@@ -250,6 +256,8 @@ public class ConfigLoader {
         public double nextStopNotifyDistance = 15.0;
         @Setting("departure-clearance-radius")
         public double departureClearanceRadius = 5.0;
+        @Setting("coordinate-arrival-radius")
+        public double coordinateArrivalRadius = 5.0;
         @Setting("bossbar-format")
         public String bossbarFormat = "Next: <stop>  <remaining>m";
         @Setting("walking-transfer-policy")

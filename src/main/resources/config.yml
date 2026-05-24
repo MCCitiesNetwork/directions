@@ -6,6 +6,8 @@ stop-arrival-buffer: 5
 next-stop-notify-distance: 15
 # Suggested range: 3-15. Prevents instant chained stop advancement.
 departure-clearance-radius: 5
+# Suggested range: 3-15. Distance to a /directions start at <x> <z> coordinate destination.
+coordinate-arrival-radius: 5
 bossbar-format: "Next: <stop>  <remaining>m"
 
 # strict: allow walking between any nearby stops

@@ -67,9 +67,9 @@ public class NavigationService implements Listener {
         sessions.clear();
     }
 
-    public void startNavigation(Player player, List<String> waypointRegionIds) {
+    public void startNavigation(Player player, List<Waypoint> waypoints) {
         stopNavigation(player);
-        if (waypointRegionIds.isEmpty()) {
+        if (waypoints.isEmpty()) {
             return;
         }
 
@@ -77,7 +77,7 @@ public class NavigationService implements Listener {
         bossBar.addPlayer(player);
 
         List<ArmorStand> arrowStands = new ArrayList<>();
-        Session session = new Session(plugin, player.getUniqueId(), waypointRegionIds, 0, arrowStands, bossBar);
+        Session session = new Session(plugin, player.getUniqueId(), waypoints, 0, arrowStands, bossBar);
         sessions.put(player.getUniqueId(), session);
         applyVisibility(session);
         lang.send(player, "command.started-navigation", lang.pRaw("prefix", lang.raw("prefix")));
@@ -119,7 +119,7 @@ public class NavigationService implements Listener {
                 continue;
             }
 
-            String currentTarget = session.currentWaypoint();
+            Waypoint currentTarget = session.currentWaypoint();
             if (currentTarget == null) {
                 lang.send(player, "navigation.arrived",
                         lang.pRaw("prefix", lang.raw("prefix")),
@@ -129,7 +129,8 @@ public class NavigationService implements Listener {
                 continue;
             }
 
-            boolean isConfiguredStop = plugin.getLoadedData().stopsById().containsKey(currentTarget);
+            boolean isConfiguredStop = currentTarget instanceof Waypoint.Region regionWaypoint
+                    && plugin.getLoadedData().stopsById().containsKey(regionWaypoint.id());
             if (ArrivalPolicy.shouldAdvanceAtWaypoint(
                     session,
                     player,
@@ -137,6 +138,7 @@ public class NavigationService implements Listener {
                     currentTarget,
                     isConfiguredStop,
                     plugin.getLoadedData().stopArrivalBuffer(),
+                    plugin.getLoadedData().coordinateArrivalRadius(),
                     plugin.getLoadedData().departureClearanceRadius()
             )) {
                 session.advance();
@@ -153,19 +155,31 @@ public class NavigationService implements Listener {
                 sendNextStopNotification(player, currentTarget);
             }
 
-            ProtectedRegion region = regionManager.getRegion(currentTarget);
-            if (region == null) {
+            Location targetLoc = targetLocation(player, regionManager, currentTarget);
+            if (targetLoc == null) {
                 continue;
             }
-            maybeSendUpcomingStopHint(player, session, region);
-            double tx = (region.getMinimumPoint().x() + region.getMaximumPoint().x()) / 2.0;
-            double ty = (region.getMinimumPoint().y() + region.getMaximumPoint().y()) / 2.0;
-            double tz = (region.getMinimumPoint().z() + region.getMaximumPoint().z()) / 2.0;
-            Location targetLoc = new Location(player.getWorld(), tx, ty, tz);
-
+            maybeSendUpcomingStopHint(player, session, regionManager, currentTarget, targetLoc);
             updateArrow(player, session, targetLoc);
-            updateBossbar(session, currentTarget, player.getLocation(), region, !isConfiguredStop);
+            updateBossbar(session, currentTarget, player.getLocation(), targetLoc);
         }
+    }
+
+    private static Location targetLocation(Player player, RegionManager regionManager, Waypoint waypoint) {
+        if (waypoint instanceof Waypoint.Coordinates coords) {
+            return new Location(player.getWorld(), coords.x(), coords.y(), coords.z());
+        }
+        if (waypoint instanceof Waypoint.Region region) {
+            ProtectedRegion protectedRegion = regionManager.getRegion(region.id());
+            if (protectedRegion == null) {
+                return null;
+            }
+            double tx = (protectedRegion.getMinimumPoint().x() + protectedRegion.getMaximumPoint().x()) / 2.0;
+            double ty = (protectedRegion.getMinimumPoint().y() + protectedRegion.getMaximumPoint().y()) / 2.0;
+            double tz = (protectedRegion.getMinimumPoint().z() + protectedRegion.getMaximumPoint().z()) / 2.0;
+            return new Location(player.getWorld(), tx, ty, tz);
+        }
+        return null;
     }
 
     private static void updateArrow(Player player, Session session, Location target) {
@@ -186,86 +200,129 @@ public class NavigationService implements Listener {
         }
     }
 
-    private static void updateBossbar(Session session, String regionId, Location from, ProtectedRegion region, boolean includeY) {
-        double remaining = ArrivalPolicy.distanceToRegion(from, region, includeY);
+    private void updateBossbar(Session session, Waypoint waypoint, Location from, Location target) {
+        double remaining = switch (waypoint) {
+            case Waypoint.Coordinates coords -> ArrivalPolicy.distanceToCoordinate(from, coords);
+            case Waypoint.Region region -> {
+                RegionManager regionManager = WorldGuard.getInstance().getPlatform().getRegionContainer()
+                        .get(BukkitAdapter.adapt(from.getWorld()));
+                if (regionManager == null) {
+                    yield 0.0;
+                }
+                ProtectedRegion protectedRegion = regionManager.getRegion(region.id());
+                if (protectedRegion == null) {
+                    yield 0.0;
+                }
+                boolean includeY = !session.plugin().getLoadedData().stopsById().containsKey(region.id());
+                yield ArrivalPolicy.distanceToRegion(from, protectedRegion, includeY);
+            }
+        };
         if (session.legStartDistance() < 0 || remaining > session.legStartDistance()) {
             session.setLegStartDistance(remaining);
         }
         double start = session.legStartDistance();
         double progress = start <= 0.0001 ? 1.0 : 1.0 - Math.min(remaining / start, 1.0);
         session.bossBar().setProgress(Math.max(0.0, Math.min(1.0, progress)));
+        String label = waypoint.displayLabel(session.plugin().getLoadedData());
         String title = session.plugin().getLoadedData().bossbarFormat()
-                .replace("<stop>", session.plugin().getLoadedData().displayStop(regionId))
+                .replace("<stop>", label)
                 .replace("<remaining>", String.valueOf(Math.round(remaining)));
         session.bossBar().setTitle(title);
     }
 
-    private void sendNextStopNotification(Player player, String currentTarget) {
+    private void sendNextStopNotification(Player player, Waypoint currentTarget) {
         Session session = sessions.get(player.getUniqueId());
         boolean isFinalWaypoint = session == null || session.nextWaypoint() == null;
+        String label = currentTarget.displayLabel(plugin.getLoadedData());
         if (isFinalWaypoint) {
             lang.send(player, "navigation.next-destination",
                     lang.pRaw("prefix", lang.raw("prefix")),
-                    lang.p("stop", displayDestination(currentTarget)));
+                    lang.p("stop", label));
             return;
         }
         String lineText = currentLegLineText(player, currentTarget);
         if (lineText == null) {
             lang.send(player, "navigation.next-stop",
                     lang.pRaw("prefix", lang.raw("prefix")),
-                    lang.p("stop", plugin.getLoadedData().displayStop(currentTarget)));
+                    lang.p("stop", label));
             return;
         }
         lang.send(player, "navigation.next-stop-with-line",
                 lang.pRaw("prefix", lang.raw("prefix")),
-                lang.p("stop", plugin.getLoadedData().displayStop(currentTarget)),
+                lang.p("stop", label),
                 lang.p("line", lineText));
     }
 
-    private void maybeSendUpcomingStopHint(Player player, Session session, ProtectedRegion currentRegion) {
-        String next = session.nextWaypoint();
+    private void maybeSendUpcomingStopHint(
+            Player player,
+            Session session,
+            RegionManager regionManager,
+            Waypoint currentTarget,
+            Location currentTargetLoc
+    ) {
+        Waypoint next = session.nextWaypoint();
         if (next == null || session.upcomingHintSentForIndex() == session.index()) {
             return;
         }
-        double remaining = ArrivalPolicy.distanceToRegion(player.getLocation(), currentRegion, false);
+        double remaining = distanceToCurrentLeg(player.getLocation(), regionManager, currentTarget, currentTargetLoc);
         if (remaining <= plugin.getLoadedData().nextStopNotifyDistance()) {
-            String current = session.currentWaypoint();
+            Waypoint current = session.currentWaypoint();
             String lineText = (current == null) ? null : lineTextBetween(current, next);
+            String nextLabel = next.displayLabel(plugin.getLoadedData());
             if (session.nextWaypointAfterNext() == null) {
                 lang.send(player, "navigation.upcoming-destination",
                         lang.pRaw("prefix", lang.raw("prefix")),
-                        lang.p("stop", displayDestination(next)));
+                        lang.p("stop", nextLabel));
             } else if (lineText == null) {
                 lang.send(player, "navigation.upcoming-next-stop",
                         lang.pRaw("prefix", lang.raw("prefix")),
-                        lang.p("stop", plugin.getLoadedData().displayStop(next)));
+                        lang.p("stop", nextLabel));
             } else {
                 lang.send(player, "navigation.upcoming-next-stop-with-line",
                         lang.pRaw("prefix", lang.raw("prefix")),
-                        lang.p("stop", plugin.getLoadedData().displayStop(next)),
+                        lang.p("stop", nextLabel),
                         lang.p("line", lineText));
             }
             session.setUpcomingHintSentForIndex(session.index());
         }
     }
 
-    private String currentLegLineText(Player player, String currentTarget) {
+    private static double distanceToCurrentLeg(
+            Location from,
+            RegionManager regionManager,
+            Waypoint currentTarget,
+            Location currentTargetLoc
+    ) {
+        if (currentTarget instanceof Waypoint.Coordinates coords) {
+            return ArrivalPolicy.distanceToCoordinate(from, coords);
+        }
+        if (currentTarget instanceof Waypoint.Region region) {
+            ProtectedRegion protectedRegion = regionManager.getRegion(region.id());
+            if (protectedRegion == null) {
+                return from.distance(currentTargetLoc);
+            }
+            return ArrivalPolicy.distanceToRegion(from, protectedRegion, false);
+        }
+        return from.distance(currentTargetLoc);
+    }
+
+    private String currentLegLineText(Player player, Waypoint currentTarget) {
         Session session = sessions.get(player.getUniqueId());
         if (session == null) {
             return null;
         }
-        String previous = session.previousWaypoint();
+        Waypoint previous = session.previousWaypoint();
         if (previous == null) {
             return null;
         }
         return lineTextBetween(previous, currentTarget);
     }
 
-    private String lineTextBetween(String fromStop, String toStop) {
-        if (fromStop == null || toStop == null) {
+    private String lineTextBetween(Waypoint from, Waypoint to) {
+        if (!(from instanceof Waypoint.Region fromRegion) || !(to instanceof Waypoint.Region toRegion)) {
             return null;
         }
-        Set<String> ids = plugin.getTransitGraph().transitLineNames(fromStop, toStop);
+        Set<String> ids = plugin.getTransitGraph().transitLineNames(fromRegion.id(), toRegion.id());
         if (ids.isEmpty()) {
             return null;
         }
@@ -275,19 +332,12 @@ public class NavigationService implements Listener {
                 .collect(Collectors.joining(", "));
     }
 
-    private String displayDestination(String regionId) {
-        if (plugin.getLoadedData().stopsById().containsKey(regionId)) {
-            return plugin.getLoadedData().displayStop(regionId);
-        }
-        return regionId;
-    }
-
     private String arrivedDestination(Session session) {
-        String destination = session.previousWaypoint();
+        Waypoint destination = session.previousWaypoint();
         if (destination == null) {
             return "destination";
         }
-        return displayDestination(destination);
+        return destination.displayLabel(plugin.getLoadedData());
     }
 
     private void destroySession(Session session) {
