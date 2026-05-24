@@ -5,7 +5,7 @@ command:
   stopped: "<prefix><green>Directions navigation stopped."
   started-header: "<prefix><white>Here is how to get to <green><destination></green>!"
   started-navigation: "<prefix><white>Navigation started."
-  usage: "<prefix><red>Usage: /directions start <region> | /directions stop | /directions reload"
+  usage: "<prefix><red>Usage: /directions start <region> | /directions start at <x> <z> | /directions start at <x> <y> <z> | /directions stop | /directions reload"
   only-player: "<prefix><red>Only players can run this command."
   no-permission: "<prefix><red>You do not have permission."
 
@@ -17,6 +17,8 @@ errors:
   no-stops-in-world: "<prefix><red>No stops are available in this world."
   no-destination-stop: "<prefix><red>No destination-side stop found in this world."
   no-route: "<prefix><red>No route found to <region>."
+  invalid-coordinates: "<prefix><red>Invalid coordinates."
+  already-at-coordinates: "<prefix><green>You are already at <destination>."
 
 directions:
   direct-walk: "<white>  <step>. Walk directly to <green><destination></green> <grey>(<distance> blocks <direction>)</grey>."

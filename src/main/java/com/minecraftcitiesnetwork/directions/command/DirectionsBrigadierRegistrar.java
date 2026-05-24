@@ -1,5 +1,6 @@
 package com.minecraftcitiesnetwork.directions.command;
 
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -22,21 +23,30 @@ public final class DirectionsBrigadierRegistrar {
 
     public void register() {
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
+            LiteralArgumentBuilder<CommandSourceStack> start = Commands.literal("start")
+                    .requires(source -> source.getSender().hasPermission("directions.use"))
+                    .then(Commands.argument("region", StringArgumentType.word())
+                            .suggests((context, builder) -> {
+                                CommandSender sender = context.getSource().getSender();
+                                if (sender instanceof Player player) {
+                                    for (String id : command.suggestions().regionSuggestions(player, builder.getRemainingLowerCase())) {
+                                        builder.suggest(id);
+                                    }
+                                }
+                                return builder.buildFuture();
+                            })
+                            .executes(this::startRegion))
+                    .then(Commands.literal("at")
+                            .then(Commands.argument("x", DoubleArgumentType.doubleArg())
+                                    .then(Commands.argument("z", DoubleArgumentType.doubleArg())
+                                            .executes(this::startAtXZ))
+                                    .then(Commands.argument("y", DoubleArgumentType.doubleArg())
+                                            .then(Commands.argument("z", DoubleArgumentType.doubleArg())
+                                                    .executes(this::startAtXYZ)))));
+
             LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("directions")
                     .executes(this::sendUsage)
-                    .then(Commands.literal("start")
-                            .requires(source -> source.getSender().hasPermission("directions.use"))
-                            .then(Commands.argument("region", StringArgumentType.word())
-                                    .suggests((context, builder) -> {
-                                        CommandSender sender = context.getSource().getSender();
-                                        if (sender instanceof Player player) {
-                                            for (String id : command.suggestions().regionSuggestions(player, builder.getRemainingLowerCase())) {
-                                                builder.suggest(id);
-                                            }
-                                        }
-                                        return builder.buildFuture();
-                                    })
-                                    .executes(this::start)))
+                    .then(start)
                     .then(Commands.literal("stop")
                             .requires(source -> source.getSender().hasPermission("directions.use"))
                             .executes(this::stop))
@@ -44,7 +54,7 @@ public final class DirectionsBrigadierRegistrar {
                             .requires(source -> source.getSender().hasPermission("directions.reload"))
                             .executes(this::reload));
 
-            event.registrar().register(root.build(), "Transit directions to WorldGuard regions");
+            event.registrar().register(root.build(), "Transit directions to WorldGuard regions or coordinates");
         });
     }
 
@@ -53,7 +63,7 @@ public final class DirectionsBrigadierRegistrar {
         return Command.SINGLE_SUCCESS;
     }
 
-    private int start(CommandContext<CommandSourceStack> context) {
+    private int startRegion(CommandContext<CommandSourceStack> context) {
         CommandSender sender = context.getSource().getSender();
         if (!(sender instanceof Player player)) {
             command.sendOnlyPlayer(sender);
@@ -61,6 +71,31 @@ public final class DirectionsBrigadierRegistrar {
         }
         String region = StringArgumentType.getString(context, "region");
         command.start(player, region);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int startAtXZ(CommandContext<CommandSourceStack> context) {
+        CommandSender sender = context.getSource().getSender();
+        if (!(sender instanceof Player player)) {
+            command.sendOnlyPlayer(sender);
+            return Command.SINGLE_SUCCESS;
+        }
+        double x = DoubleArgumentType.getDouble(context, "x");
+        double z = DoubleArgumentType.getDouble(context, "z");
+        command.startAt(player, x, z);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int startAtXYZ(CommandContext<CommandSourceStack> context) {
+        CommandSender sender = context.getSource().getSender();
+        if (!(sender instanceof Player player)) {
+            command.sendOnlyPlayer(sender);
+            return Command.SINGLE_SUCCESS;
+        }
+        double x = DoubleArgumentType.getDouble(context, "x");
+        double y = DoubleArgumentType.getDouble(context, "y");
+        double z = DoubleArgumentType.getDouble(context, "z");
+        command.startAt(player, x, y, z);
         return Command.SINGLE_SUCCESS;
     }
 

@@ -50,11 +50,13 @@ public class LangService {
         sender.sendMessage(message(key, placeholders));
     }
 
-    public TagResolver p(String key, String value) {
+    /** Placeholder with user-supplied text escaped so it cannot inject MiniMessage tags. */
+    public TagResolver placeholder(String key, String value) {
         return Placeholder.parsed(key, escape(value));
     }
 
-    public TagResolver pRaw(String key, String value) {
+    /** Placeholder for trusted MiniMessage (e.g. values loaded from lang.yml). */
+    public TagResolver placeholderRaw(String key, String value) {
         return Placeholder.parsed(key, value);
     }
 
