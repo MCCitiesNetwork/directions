@@ -18,3 +18,9 @@ permissions:
   directions.reload:
     description: Reload directions config
     default: op
+  gps.use:
+    description: Use the /gps command
+    default: true
+  compass.use:
+    description: Use the /compass command
+    default: true

@@ -11,27 +11,24 @@ import com.minecraftcitiesnetwork.directions.DirectionsPlugin;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
-public final class DirectionsBrigadierRegistrar {
+public final class GpsBrigadierRegistrar {
     private final DirectionsPlugin plugin;
-    private final DirectionsCommand command;
+    private final GpsCommand command;
 
-    public DirectionsBrigadierRegistrar(DirectionsPlugin plugin, DirectionsCommand command) {
+    public GpsBrigadierRegistrar(DirectionsPlugin plugin, GpsCommand command) {
         this.plugin = plugin;
         this.command = command;
     }
 
     public void register() {
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
-            LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("directions")
+            LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("gps")
                     .executes(this::sendUsage)
                     .then(Commands.literal("stop")
-                            .requires(source -> source.getSender().hasPermission("directions.use"))
+                            .requires(source -> source.getSender().hasPermission("gps.use"))
                             .executes(this::stop))
-                    .then(Commands.literal("reload")
-                            .requires(source -> source.getSender().hasPermission("directions.reload"))
-                            .executes(this::reload))
                     .then(Commands.argument("region", StringArgumentType.word())
-                            .requires(source -> source.getSender().hasPermission("directions.use"))
+                            .requires(source -> source.getSender().hasPermission("gps.use"))
                             .suggests((context, builder) -> {
                                 CommandSender sender = context.getSource().getSender();
                                 if (sender instanceof Player player) {
@@ -43,7 +40,7 @@ public final class DirectionsBrigadierRegistrar {
                             })
                             .executes(this::startRegion));
 
-            event.registrar().register(root.build(), "Transit directions to WorldGuard regions");
+            event.registrar().register(root.build(), "Direct arrow navigation to a WorldGuard region");
         });
     }
 
@@ -70,11 +67,6 @@ public final class DirectionsBrigadierRegistrar {
             return Command.SINGLE_SUCCESS;
         }
         command.stop(player);
-        return Command.SINGLE_SUCCESS;
-    }
-
-    private int reload(CommandContext<CommandSourceStack> context) {
-        command.reload(context.getSource().getSender());
         return Command.SINGLE_SUCCESS;
     }
 }

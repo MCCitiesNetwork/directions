@@ -55,6 +55,10 @@ public class ConfigLoader {
             if (bossbarFormat == null || bossbarFormat.isBlank()) {
                 bossbarFormat = "Next: <stop>  <remaining>m";
             }
+            String gpsBossbarFormat = root.gpsBossbarFormat;
+            if (gpsBossbarFormat == null || gpsBossbarFormat.isBlank()) {
+                gpsBossbarFormat = "Destination: <stop>  <remaining>m";
+            }
             if (transferPenalty < 0) {
                 throw new IllegalStateException("transfer-penalty must be >= 0");
             }
@@ -141,6 +145,7 @@ public class ConfigLoader {
                     departureClearanceRadius,
                     coordinateArrivalRadius,
                     bossbarFormat,
+                    gpsBossbarFormat,
                     walkingTransferPolicy,
                     lineDisplayNames,
                     stopDisplayNames,
@@ -210,6 +215,7 @@ public class ConfigLoader {
                              double departureClearanceRadius,
                              double coordinateArrivalRadius,
                              String bossbarFormat,
+                             String gpsBossbarFormat,
                              String walkingTransferPolicy,
                              Map<String, String> lineDisplayNames,
                              Map<String, String> stopDisplayNames,
@@ -223,6 +229,11 @@ public class ConfigLoader {
         public String displayStop(String stopId) {
             String key = stopId.toLowerCase(Locale.ROOT);
             return stopDisplayNames.getOrDefault(key, humanize(key));
+        }
+
+        public boolean hasNamedStopDisplay(String regionId) {
+            String key = regionId.toLowerCase(Locale.ROOT);
+            return stopsById.containsKey(key) || stopDisplayNames.containsKey(key);
         }
 
         private static String humanize(String key) {
@@ -260,6 +271,8 @@ public class ConfigLoader {
         public double coordinateArrivalRadius = 5.0;
         @Setting("bossbar-format")
         public String bossbarFormat = "Next: <stop>  <remaining>m";
+        @Setting("gps-bossbar-format")
+        public String gpsBossbarFormat = "Destination: <stop>  <remaining>m";
         @Setting("walking-transfer-policy")
         public String walkingTransferPolicy = "shared-mode-only";
         @Setting("lines")

@@ -9,6 +9,7 @@ departure-clearance-radius: 5
 # Suggested range: 3-15. Distance to a /directions start at <x> <z> coordinate destination.
 coordinate-arrival-radius: 5
 bossbar-format: "Next: <stop>  <remaining>m"
+gps-bossbar-format: "Destination: <stop>  <remaining>m"
 
 # strict: allow walking between any nearby stops
 # shared-mode-only: only allow walking edges when both stops share bus/train mode

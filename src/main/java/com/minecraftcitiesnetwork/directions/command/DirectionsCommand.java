@@ -5,6 +5,7 @@ import com.sk89q.worldguard.WorldGuard;
 import com.sk89q.worldguard.protection.managers.RegionManager;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import com.minecraftcitiesnetwork.directions.DirectionsPlugin;
+import com.minecraftcitiesnetwork.directions.config.ConfigLoader;
 import com.minecraftcitiesnetwork.directions.graph.TransitGraph;
 import com.minecraftcitiesnetwork.directions.i18n.LangService;
 import com.minecraftcitiesnetwork.directions.model.RouteResult;
@@ -54,8 +55,9 @@ public class DirectionsCommand {
     }
 
     public void stop(Player player) {
-        plugin.getNavigationService().stopNavigation(player);
-        lang.send(player, "command.stopped", lang.placeholderRaw("prefix", lang.raw("prefix")));
+        if (plugin.getNavigationService().stopNavigation(player)) {
+            lang.send(player, "command.stopped", lang.placeholderRaw("prefix", lang.raw("prefix")));
+        }
     }
 
     public void start(Player player, String targetIdRaw) {
@@ -73,10 +75,9 @@ public class DirectionsCommand {
             return;
         }
 
-        String displayName = displayDestination(targetId);
         lang.send(player, "command.started-header",
                 lang.placeholderRaw("prefix", lang.raw("prefix")),
-                lang.placeholder("destination", displayName));
+                lang.regionDestination("destination", plugin.getLoadedData(), targetId));
 
         if (regionManager.getApplicableRegions(BukkitAdapter.asBlockVector(player.getLocation()))
                 .getRegions()
@@ -84,7 +85,7 @@ public class DirectionsCommand {
                 .anyMatch(r -> r.getId().equalsIgnoreCase(targetId))) {
             lang.send(player, "errors.already-in-region",
                     lang.placeholderRaw("prefix", lang.raw("prefix")),
-                    lang.placeholder("region", displayStop(targetId)));
+                    lang.stopName("region", plugin.getLoadedData(), targetId));
             return;
         }
 
@@ -98,7 +99,7 @@ public class DirectionsCommand {
         double destX = (navRegion.getMinimumPoint().x() + navRegion.getMaximumPoint().x()) / 2.0;
         double destZ = (navRegion.getMinimumPoint().z() + navRegion.getMaximumPoint().z()) / 2.0;
         Waypoint finalWaypoint = new Waypoint.Region(destination.requestedRegionId());
-        routeAndNavigate(player, regionManager, destX, destZ, displayName, finalWaypoint);
+        routeAndNavigate(player, regionManager, destX, destZ, finalWaypoint);
     }
 
     public void startAt(Player player, double x, double z) {
@@ -121,20 +122,19 @@ public class DirectionsCommand {
         }
 
         Waypoint.Coordinates destination = new Waypoint.Coordinates(x, y, z, includeY);
-        String displayName = destination.displayLabel(plugin.getLoadedData());
         lang.send(player, "command.started-header",
                 lang.placeholderRaw("prefix", lang.raw("prefix")),
-                lang.placeholder("destination", displayName));
+                lang.waypointLabel("destination", plugin.getLoadedData(), destination));
 
         double arrivalRadius = plugin.getLoadedData().coordinateArrivalRadius();
         if (destination.isWithinRadius(player.getLocation(), arrivalRadius)) {
             lang.send(player, "errors.already-at-coordinates",
                     lang.placeholderRaw("prefix", lang.raw("prefix")),
-                    lang.placeholder("destination", displayName));
+                    lang.waypointLabel("destination", plugin.getLoadedData(), destination));
             return;
         }
 
-        routeAndNavigate(player, regionManager, x, z, displayName, destination);
+        routeAndNavigate(player, regionManager, x, z, destination);
     }
 
     private void routeAndNavigate(
@@ -142,7 +142,6 @@ public class DirectionsCommand {
             RegionManager regionManager,
             double destX,
             double destZ,
-            String destinationName,
             Waypoint finalWaypoint
     ) {
         TransitGraph graph = plugin.getTransitGraph();
@@ -183,20 +182,23 @@ public class DirectionsCommand {
         if (route.pathNodes().isEmpty()) {
             lang.send(player, "errors.no-route",
                     lang.placeholderRaw("prefix", lang.raw("prefix")),
-                    lang.placeholder("region", destinationName));
+                    lang.waypointLabel("region", plugin.getLoadedData(), finalWaypoint));
             return;
         }
 
         List<Waypoint> navWaypoints = buildWaypoints(route.pathNodes(), finalWaypoint);
 
         if (!hasTransitHop(route.pathNodes(), graph)) {
-            sendDirectWalk(player, playerLoc, destX, destZ, destinationName);
+            sendDirectWalk(player, playerLoc, destX, destZ, finalWaypoint);
             plugin.getNavigationService().startNavigation(player, List.of(finalWaypoint));
+            sendStartedNavigation(player, finalWaypoint);
             return;
         }
 
         plugin.getNavigationService().startNavigation(player, navWaypoints);
-        sendRoute(player, route.pathNodes(), graph, startResolution.fallbackUsed(), destinationFallback, destinationName);
+        sendStartedNavigation(player, finalWaypoint);
+        sendRoute(player, route.pathNodes(), graph, startResolution.fallbackUsed(), destinationFallback, finalWaypoint);
+        sendSwitchToDirectHint(player, finalWaypoint);
     }
 
     private RegionManager regionManager(Player player) {
@@ -213,7 +215,8 @@ public class DirectionsCommand {
                            TransitGraph graph,
                            boolean startFallback,
                            boolean destinationFallback,
-                           String destinationName) {
+                           Waypoint finalWaypoint) {
+        ConfigLoader.LoadedData loadedData = plugin.getLoadedData();
         List<Step> steps = new ArrayList<>();
 
         for (int i = 0; i + 1 < nodes.size(); i++) {
@@ -222,7 +225,7 @@ public class DirectionsCommand {
 
             if (from.equals(START_NODE)) {
                 steps.add(new Step("directions.walk-to-stop",
-                        lang.placeholder("to", displayStop(to)),
+                        lang.stopName("to", loadedData, to),
                         lang.placeholder("hint", directionHint(player.getLocation(), graph.getStopsById().get(to)))));
                 continue;
             }
@@ -230,8 +233,8 @@ public class DirectionsCommand {
                 Stop stop = graph.getStopsById().get(from);
                 if (stop != null) {
                     steps.add(new Step("directions.walk-to-destination",
-                            lang.placeholder("from", displayStop(stop.regionId())),
-                            lang.placeholder("destination", destinationName)));
+                            lang.stopName("from", loadedData, stop.regionId()),
+                            lang.waypointLabel("destination", loadedData, finalWaypoint)));
                 }
                 continue;
             }
@@ -241,17 +244,17 @@ public class DirectionsCommand {
                 String lineText = lines.isEmpty()
                         ? "transit"
                         : lines.stream()
-                        .map(plugin.getLoadedData()::displayLine)
+                        .map(loadedData::displayLine)
                         .sorted()
                         .collect(Collectors.joining(", "));
                 steps.add(new Step("directions.take-line",
-                        lang.placeholder("line", lineText),
-                        lang.placeholder("from", displayStop(from)),
-                        lang.placeholder("to", displayStop(to))));
+                        lang.lineNames("line", lineText),
+                        lang.stopName("from", loadedData, from),
+                        lang.stopName("to", loadedData, to)));
             } else {
                 steps.add(new Step("directions.walk-between-stops",
-                        lang.placeholder("from", displayStop(from)),
-                        lang.placeholder("to", displayStop(to))));
+                        lang.stopName("from", loadedData, from),
+                        lang.stopName("to", loadedData, to)));
             }
         }
 
@@ -270,15 +273,29 @@ public class DirectionsCommand {
         }
     }
 
-    private String displayStop(String stopId) {
-        return plugin.getLoadedData().displayStop(stopId);
+    private void sendSwitchToDirectHint(Player player, Waypoint destination) {
+        String command = directNavigationCommand(destination);
+        lang.send(player, "directions.switch-to-direct",
+                lang.placeholderRaw("command", command));
     }
 
-    private String displayDestination(String regionId) {
-        if (plugin.getLoadedData().stopsById().containsKey(regionId)) {
-            return displayStop(regionId);
+    private static String directNavigationCommand(Waypoint destination) {
+        return switch (destination) {
+            case Waypoint.Region region -> "/gps " + region.id();
+            case Waypoint.Coordinates coords -> {
+                if (coords.includeY()) {
+                    yield "/compass " + formatCoord(coords.x()) + " " + formatCoord(coords.y()) + " " + formatCoord(coords.z());
+                }
+                yield "/compass " + formatCoord(coords.x()) + " " + formatCoord(coords.z());
+            }
+        };
+    }
+
+    private static String formatCoord(double value) {
+        if (Math.rint(value) == value) {
+            return String.valueOf((long) value);
         }
-        return regionId;
+        return String.format("%.1f", value);
     }
 
     private static String directionHint(Location from, Stop to) {
@@ -310,15 +327,21 @@ public class DirectionsCommand {
         return false;
     }
 
-    private void sendDirectWalk(Player player, Location from, double toX, double toZ, String destinationName) {
+    private void sendDirectWalk(Player player, Location from, double toX, double toZ, Waypoint finalWaypoint) {
         double dx = toX - from.getX();
         double dz = toZ - from.getZ();
         double blocks = Math.sqrt(dx * dx + dz * dz);
         lang.send(player, "directions.direct-walk",
                 lang.placeholder("step", "1"),
-                lang.placeholder("destination", destinationName),
+                lang.waypointLabel("destination", plugin.getLoadedData(), finalWaypoint),
                 lang.placeholder("distance", String.valueOf(Math.round(blocks))),
                 lang.placeholder("direction", cardinalFromDelta(dx, dz)));
+    }
+
+    private void sendStartedNavigation(Player player, Waypoint destination) {
+        lang.send(player, "command.started-navigation",
+                lang.placeholderRaw("prefix", lang.raw("prefix")),
+                lang.waypointLabel("destination", plugin.getLoadedData(), destination));
     }
 
     private static TagResolver[] prepend(TagResolver[] rest, TagResolver first) {
