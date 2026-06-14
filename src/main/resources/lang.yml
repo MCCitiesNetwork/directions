@@ -38,6 +38,7 @@ directions:
   walk-to-destination: "<white>  <step>. Walk to <destination> from <from>."
   warn-start-fallback: "<yellow>  ⚠ No nearby starting stop found; using nearest stop."
   warn-destination-fallback: "<yellow>  ⚠ Destination has no nearby stop; using nearest stop."
+  gps-fallback: "<prefix><yellow>No transit route available to <destination>. Follow the direct arrow instead."
   switch-to-direct: "<gray>  Prefer a direct arrow? <click:run_command:'<command>'><aqua>Switch to GPS</aqua></click> <dark_gray>(<command>)</dark_gray>"
 
 navigation:

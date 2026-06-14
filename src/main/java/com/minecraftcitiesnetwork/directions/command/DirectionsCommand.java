@@ -149,7 +149,7 @@ public class DirectionsCommand {
         PlayerPositionResolver.StartResolution startResolution =
                 playerPositionResolver.resolve(player, regionManager, graph);
         if (startResolution.startEdges().isEmpty()) {
-            lang.send(player, "errors.no-stops-in-world", lang.placeholderRaw("prefix", lang.raw("prefix")));
+            startGpsFallback(player, finalWaypoint);
             return;
         }
 
@@ -159,7 +159,7 @@ public class DirectionsCommand {
             nearDestination = graph.nearestStops(destX, destZ, player.getWorld().getName(), 1);
         }
         if (nearDestination.isEmpty()) {
-            lang.send(player, "errors.no-destination-stop", lang.placeholderRaw("prefix", lang.raw("prefix")));
+            startGpsFallback(player, finalWaypoint);
             return;
         }
 
@@ -180,9 +180,7 @@ public class DirectionsCommand {
                 destinationEdges
         );
         if (route.pathNodes().isEmpty()) {
-            lang.send(player, "errors.no-route",
-                    lang.placeholderRaw("prefix", lang.raw("prefix")),
-                    lang.waypointLabel("region", plugin.getLoadedData(), finalWaypoint));
+            startGpsFallback(player, finalWaypoint);
             return;
         }
 
@@ -342,6 +340,13 @@ public class DirectionsCommand {
         lang.send(player, "command.started-navigation",
                 lang.placeholderRaw("prefix", lang.raw("prefix")),
                 lang.waypointLabel("destination", plugin.getLoadedData(), destination));
+    }
+
+    private void startGpsFallback(Player player, Waypoint finalWaypoint) {
+        plugin.getNavigationService().startGpsNavigation(player, List.of(finalWaypoint));
+        lang.send(player, "directions.gps-fallback",
+                lang.placeholderRaw("prefix", lang.raw("prefix")),
+                lang.waypointLabel("destination", plugin.getLoadedData(), finalWaypoint));
     }
 
     private static TagResolver[] prepend(TagResolver[] rest, TagResolver first) {
