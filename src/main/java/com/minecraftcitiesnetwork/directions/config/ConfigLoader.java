@@ -109,6 +109,10 @@ public class ConfigLoader {
                 if (!type.equals("bus") && !type.equals("train")) {
                     throw new IllegalStateException("Line '" + lineId + "' has invalid type '" + type + "'. Use bus or train.");
                 }
+                String costModel = (lineSection.costModel == null ? "distance" : lineSection.costModel).toLowerCase(Locale.ROOT);
+                if (!costModel.equals("distance") && !costModel.equals("fixed")) {
+                    throw new IllegalStateException("Line '" + lineId + "' has invalid cost-model '" + costModel + "'. Use distance or fixed.");
+                }
 
                 List<String> stops = new ArrayList<>();
                 for (String stop : lineSection.stops == null ? List.<String>of() : lineSection.stops) {
@@ -121,7 +125,7 @@ public class ConfigLoader {
                     throw new IllegalStateException("Line '" + lineId + "' has no stops.");
                 }
 
-                lines.add(new Line(lineId, type, List.copyOf(stops)));
+                lines.add(new Line(lineId, type, costModel, List.copyOf(stops)));
                 for (String stop : stops) {
                     allStopIds.add(stop);
                     stopToLines.computeIfAbsent(stop, __ -> new HashSet<>()).add(lineId);
@@ -291,6 +295,8 @@ public class ConfigLoader {
     public static final class LineSection {
         @Setting("type")
         public String type = "bus";
+        @Setting("cost-model")
+        public String costModel = "distance";
         @Setting("stops")
         public List<String> stops = Collections.emptyList();
     }

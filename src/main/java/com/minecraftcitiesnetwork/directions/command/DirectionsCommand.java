@@ -169,16 +169,9 @@ public class DirectionsCommand {
         }
 
         Location playerLoc = player.getLocation();
-        RouteResult route = graph.routeAStar(
-                START_NODE,
-                playerLoc.getX(),
-                playerLoc.getZ(),
-                DEST_NODE,
-                destX,
-                destZ,
-                startResolution.startEdges(),
-                destinationEdges
-        );
+        RouteResult route = graph.hasFixedCostLines()
+                ? graph.route(START_NODE, DEST_NODE, startResolution.startEdges(), destinationEdges)
+                : graph.routeAStar(START_NODE, playerLoc.getX(), playerLoc.getZ(), DEST_NODE, destX, destZ, startResolution.startEdges(), destinationEdges);
         if (route.pathNodes().isEmpty()) {
             startGpsFallback(player, finalWaypoint);
             return;
