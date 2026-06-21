@@ -1,5 +1,3 @@
-# Display names support MiniMessage. Quote values that contain tags.
-# Example: reveille_metro_line_prospect: "<light_purple>Prospect Line"
 line-display-names:
   demo_bus_line: Demo Bus Line
   demo_metro_line: Demo Metro Line

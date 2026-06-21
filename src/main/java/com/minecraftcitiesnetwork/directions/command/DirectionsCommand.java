@@ -307,7 +307,7 @@ public class DirectionsCommand {
     }
 
     private static String cardinalFromDelta(double dx, double dz) {
-        double angle = Math.toDegrees(Math.atan2(-dx, dz));
+        double angle = Math.toDegrees(Math.atan2(dx, -dz));
         if (angle < 0) {
             angle += 360;
         }
