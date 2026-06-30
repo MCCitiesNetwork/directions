@@ -1,5 +1,6 @@
 package com.minecraftcitiesnetwork.directions.graph;
 
+import com.minecraftcitiesnetwork.directions.model.CostModel;
 import com.minecraftcitiesnetwork.directions.model.Line;
 import com.minecraftcitiesnetwork.directions.model.RouteResult;
 import com.minecraftcitiesnetwork.directions.model.Stop;
@@ -21,21 +22,17 @@ class TransitGraphWalkingPolicyTest {
         TransitGraph graph = new TransitGraph(
                 List.of(bus, train),
                 List.of(
-                        new Line("bus-line", "bus", List.of("bus-stop")),
-                        new Line("train-line", "train", List.of("train-stop"))
+                        new Line("bus-line", "bus", CostModel.DISTANCE, List.of("bus-stop")),
+                        new Line("train-line", "train", CostModel.DISTANCE, List.of("train-stop"))
                 ),
                 50.0,
                 150.0,
                 "shared-mode-only"
         );
 
-        RouteResult route = graph.routeAStar(
+        RouteResult route = graph.route(
                 "__start__",
-                0.0,
-                0.0,
                 "__dest__",
-                10.0,
-                0.0,
                 Map.of("bus-stop", 0.0),
                 Map.of("train-stop", 0.0)
         );
@@ -50,21 +47,17 @@ class TransitGraphWalkingPolicyTest {
         TransitGraph graph = new TransitGraph(
                 List.of(bus, train),
                 List.of(
-                        new Line("bus-line", "bus", List.of("bus-stop")),
-                        new Line("train-line", "train", List.of("train-stop"))
+                        new Line("bus-line", "bus", CostModel.DISTANCE, List.of("bus-stop")),
+                        new Line("train-line", "train", CostModel.DISTANCE, List.of("train-stop"))
                 ),
                 50.0,
                 150.0,
                 "strict"
         );
 
-        RouteResult route = graph.routeAStar(
+        RouteResult route = graph.route(
                 "__start__",
-                0.0,
-                0.0,
                 "__dest__",
-                10.0,
-                0.0,
                 Map.of("bus-stop", 0.0),
                 Map.of("train-stop", 0.0)
         );

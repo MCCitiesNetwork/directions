@@ -1,43 +1,39 @@
 package com.minecraftcitiesnetwork.directions.resolver;
 
+import com.sk89q.worldedit.math.BlockVector2;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
-import java.util.Objects;
+import java.util.List;
 
 public class DestinationResolver {
     public @NotNull Destination resolve(@NotNull ProtectedRegion region) {
         BlockVector3 min = region.getMinimumPoint();
         BlockVector3 max = region.getMaximumPoint();
-        boolean isFlat = min.y() == -64 && max.y() == 319;
 
-        double cx = (min.x() + max.x()) / 2.0;
-        double cy = (min.y() + max.y()) / 2.0;
-        double cz = (min.z() + max.z()) / 2.0;
-
-        ProtectedRegion navTarget = region;
-        @Nullable String floorNote = null;
-        if (!isFlat && region.getParent() != null) {
-            // Parent is only used as a broader navigation anchor.
-            // Callers should still complete on requestedRegionId.
-            navTarget = region.getParent();
-            floorNote = "Note: destination is inside '" + region.getId() + "' (y ~= " + Math.round(cy) + ")";
-        } else if (!isFlat) {
-            floorNote = "Note: destination y ~= " + Math.round(cy);
+        // Centroid of the footprint vertices. For a cuboid getPoints() returns its 4 corners, so this is
+        // identical to the bounding-box midpoint; for polygons it stays inside the shape instead of the
+        // AABB midpoint, which can fall outside a concave region.
+        List<BlockVector2> points = region.getPoints();
+        double sumX = 0;
+        double sumZ = 0;
+        for (BlockVector2 p : points) {
+            sumX += p.x();
+            sumZ += p.z();
         }
-        return new Destination(region.getId(), Objects.requireNonNull(navTarget).getId(), cx, cy, cz, isFlat, floorNote);
+        double cx = sumX / points.size();
+        double cz = sumZ / points.size();
+        double cy = (min.y() + max.y()) / 2.0;
+
+        return new Destination(region.getId(), cx, cy, cz);
     }
 
     public record Destination(
             @NotNull String requestedRegionId,
-            @NotNull String navigationRegionId,
             double x,
             double y,
-            double z,
-            boolean flat,
-            @Nullable String floorNote
+            double z
     ) {
     }
 }

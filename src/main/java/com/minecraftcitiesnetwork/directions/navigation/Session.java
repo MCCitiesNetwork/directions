@@ -15,18 +15,24 @@ final class Session implements SessionView {
     private int index;
     private final List<ArmorStand> arrowStands;
     private final BossBar bossBar;
+    private final boolean gps;
     private double legStartDistance;
     private int upcomingHintSentForIndex;
 
-    Session(DirectionsPlugin plugin, UUID playerId, List<Waypoint> waypoints, int index, List<ArmorStand> arrowStands, BossBar bossBar) {
+    Session(DirectionsPlugin plugin, UUID playerId, List<Waypoint> waypoints, int index, List<ArmorStand> arrowStands, BossBar bossBar, boolean gps) {
         this.plugin = plugin;
         this.playerId = playerId;
         this.waypoints = waypoints;
         this.index = index;
         this.arrowStands = arrowStands;
         this.bossBar = bossBar;
+        this.gps = gps;
         this.legStartDistance = -1.0;
         this.upcomingHintSentForIndex = -1;
+    }
+
+    boolean gps() {
+        return gps;
     }
 
     UUID playerId() {

@@ -5,6 +5,7 @@ import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldguard.WorldGuard;
 import com.sk89q.worldguard.protection.managers.RegionManager;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
+import com.minecraftcitiesnetwork.directions.model.CostModel;
 import com.minecraftcitiesnetwork.directions.model.Line;
 import com.minecraftcitiesnetwork.directions.model.Stop;
 import org.bukkit.Bukkit;
@@ -54,6 +55,10 @@ public class ConfigLoader {
             String bossbarFormat = root.bossbarFormat;
             if (bossbarFormat == null || bossbarFormat.isBlank()) {
                 bossbarFormat = "Next: <stop>  <remaining>m";
+            }
+            String gpsBossbarFormat = root.gpsBossbarFormat;
+            if (gpsBossbarFormat == null || gpsBossbarFormat.isBlank()) {
+                gpsBossbarFormat = "Destination: <stop>  <remaining>m";
             }
             if (transferPenalty < 0) {
                 throw new IllegalStateException("transfer-penalty must be >= 0");
@@ -105,6 +110,9 @@ public class ConfigLoader {
                 if (!type.equals("bus") && !type.equals("train")) {
                     throw new IllegalStateException("Line '" + lineId + "' has invalid type '" + type + "'. Use bus or train.");
                 }
+                CostModel costModel = CostModel.fromConfig(lineSection.costModel)
+                        .orElseThrow(() -> new IllegalStateException("Line '" + lineId
+                                + "' has invalid cost-model '" + lineSection.costModel + "'. Use distance or fixed."));
 
                 List<String> stops = new ArrayList<>();
                 for (String stop : lineSection.stops == null ? List.<String>of() : lineSection.stops) {
@@ -117,7 +125,7 @@ public class ConfigLoader {
                     throw new IllegalStateException("Line '" + lineId + "' has no stops.");
                 }
 
-                lines.add(new Line(lineId, type, List.copyOf(stops)));
+                lines.add(new Line(lineId, type, costModel, List.copyOf(stops)));
                 for (String stop : stops) {
                     allStopIds.add(stop);
                     stopToLines.computeIfAbsent(stop, __ -> new HashSet<>()).add(lineId);
@@ -141,6 +149,7 @@ public class ConfigLoader {
                     departureClearanceRadius,
                     coordinateArrivalRadius,
                     bossbarFormat,
+                    gpsBossbarFormat,
                     walkingTransferPolicy,
                     lineDisplayNames,
                     stopDisplayNames,
@@ -210,6 +219,7 @@ public class ConfigLoader {
                              double departureClearanceRadius,
                              double coordinateArrivalRadius,
                              String bossbarFormat,
+                             String gpsBossbarFormat,
                              String walkingTransferPolicy,
                              Map<String, String> lineDisplayNames,
                              Map<String, String> stopDisplayNames,
@@ -223,6 +233,11 @@ public class ConfigLoader {
         public String displayStop(String stopId) {
             String key = stopId.toLowerCase(Locale.ROOT);
             return stopDisplayNames.getOrDefault(key, humanize(key));
+        }
+
+        public boolean hasNamedStopDisplay(String regionId) {
+            String key = regionId.toLowerCase(Locale.ROOT);
+            return stopsById.containsKey(key) || stopDisplayNames.containsKey(key);
         }
 
         private static String humanize(String key) {
@@ -260,6 +275,8 @@ public class ConfigLoader {
         public double coordinateArrivalRadius = 5.0;
         @Setting("bossbar-format")
         public String bossbarFormat = "Next: <stop>  <remaining>m";
+        @Setting("gps-bossbar-format")
+        public String gpsBossbarFormat = "Destination: <stop>  <remaining>m";
         @Setting("walking-transfer-policy")
         public String walkingTransferPolicy = "shared-mode-only";
         @Setting("lines")
@@ -278,6 +295,8 @@ public class ConfigLoader {
     public static final class LineSection {
         @Setting("type")
         public String type = "bus";
+        @Setting("cost-model")
+        public String costModel = "distance";
         @Setting("stops")
         public List<String> stops = Collections.emptyList();
     }

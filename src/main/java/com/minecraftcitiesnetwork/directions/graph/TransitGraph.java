@@ -1,5 +1,6 @@
 package com.minecraftcitiesnetwork.directions.graph;
 
+import com.minecraftcitiesnetwork.directions.model.CostModel;
 import com.minecraftcitiesnetwork.directions.model.Line;
 import com.minecraftcitiesnetwork.directions.model.RouteResult;
 import com.minecraftcitiesnetwork.directions.model.Stop;
@@ -22,6 +23,7 @@ public class TransitGraph {
     private final Map<String, Set<String>> stopTransitKinds;
     private final double maxWalkingDistance;
     private final String walkingTransferPolicy;
+    private final boolean hasFixedCostLines;
 
     public TransitGraph(
             Collection<Stop> stops,
@@ -44,9 +46,14 @@ public class TransitGraph {
             stopTransitKinds.put(stop.regionId(), new HashSet<>());
         }
 
+        this.hasFixedCostLines = lines.stream().anyMatch(l -> l.costModel() == CostModel.FIXED);
         indexStopTransitKinds(lines);
         buildTransitEdges(lines, transferPenalty);
         buildWalkingEdges();
+    }
+
+    public boolean hasFixedCostLines() {
+        return hasFixedCostLines;
     }
 
     public Map<String, Stop> getStopsById() {
@@ -80,36 +87,6 @@ public class TransitGraph {
         return Dijkstra.shortestPath(working, startNode, targetNode);
     }
 
-    public RouteResult routeAStar(
-            String startNode,
-            double startX,
-            double startZ,
-            String targetNode,
-            double targetX,
-            double targetZ,
-            Map<String, Double> startToStops,
-            Map<String, Double> stopsToTarget
-    ) {
-        Map<String, Map<String, Double>> working = copyGraph(staticAdjacency);
-        working.putIfAbsent(startNode, new HashMap<>());
-        working.putIfAbsent(targetNode, new HashMap<>());
-
-        for (Map.Entry<String, Double> edge : startToStops.entrySet()) {
-            addBidirectionalEdge(working, startNode, edge.getKey(), edge.getValue());
-        }
-        for (Map.Entry<String, Double> edge : stopsToTarget.entrySet()) {
-            addBidirectionalEdge(working, targetNode, edge.getKey(), edge.getValue());
-        }
-
-        Map<String, NodePos> pos = new HashMap<>();
-        for (Stop stop : stopsById.values()) {
-            pos.put(stop.regionId(), new NodePos(stop.x(), stop.z()));
-        }
-        pos.put(startNode, new NodePos(startX, startZ));
-        pos.put(targetNode, new NodePos(targetX, targetZ));
-
-        return aStarShortestPath(working, pos, startNode, targetNode);
-    }
 
     public List<StopDistance> nearestStops(double x, double z, String worldName, int limit) {
         List<StopDistance> candidates = new ArrayList<>();
@@ -148,7 +125,7 @@ public class TransitGraph {
                 if (a == null || b == null || !a.worldName().equalsIgnoreCase(b.worldName())) {
                     continue;
                 }
-                double cost = a.distance2D(b) + transferPenalty;
+                double cost = line.costModel() == CostModel.FIXED ? transferPenalty : a.distance2D(b) + transferPenalty;
                 addBidirectionalEdge(staticAdjacency, a.regionId(), b.regionId(), cost);
                 transitEdges.add(edgeKey(a.regionId(), b.regionId()));
                 transitEdges.add(edgeKey(b.regionId(), a.regionId()));
@@ -229,6 +206,37 @@ public class TransitGraph {
         return a + "->" + b;
     }
 
+    public RouteResult routeAStar(
+            String startNode,
+            double startX,
+            double startZ,
+            String targetNode,
+            double targetX,
+            double targetZ,
+            Map<String, Double> startToStops,
+            Map<String, Double> stopsToTarget
+    ) {
+        Map<String, Map<String, Double>> working = copyGraph(staticAdjacency);
+        working.putIfAbsent(startNode, new HashMap<>());
+        working.putIfAbsent(targetNode, new HashMap<>());
+
+        for (Map.Entry<String, Double> edge : startToStops.entrySet()) {
+            addBidirectionalEdge(working, startNode, edge.getKey(), edge.getValue());
+        }
+        for (Map.Entry<String, Double> edge : stopsToTarget.entrySet()) {
+            addBidirectionalEdge(working, targetNode, edge.getKey(), edge.getValue());
+        }
+
+        Map<String, NodePos> pos = new HashMap<>();
+        for (Stop stop : stopsById.values()) {
+            pos.put(stop.regionId(), new NodePos(stop.x(), stop.z()));
+        }
+        pos.put(startNode, new NodePos(startX, startZ));
+        pos.put(targetNode, new NodePos(targetX, targetZ));
+
+        return aStarShortestPath(working, pos, startNode, targetNode);
+    }
+
     private static RouteResult aStarShortestPath(
             Map<String, Map<String, Double>> graph,
             Map<String, NodePos> nodePositions,
@@ -258,8 +266,7 @@ public class TransitGraph {
                 if (tentative < gScore.getOrDefault(next, Double.POSITIVE_INFINITY)) {
                     gScore.put(next, tentative);
                     prev.put(next, node);
-                    double f = tentative + heuristic(nodePositions, next, target);
-                    open.add(new NodeF(next, f));
+                    open.add(new NodeF(next, tentative + heuristic(nodePositions, next, target)));
                 }
             }
         }
@@ -284,19 +291,14 @@ public class TransitGraph {
         if (a == null || b == null) {
             return 0.0;
         }
-        return a.distance2D(b);
+        double dx = a.x() - b.x();
+        double dz = a.z() - b.z();
+        return Math.sqrt(dx * dx + dz * dz);
     }
 
-    private record NodePos(double x, double z) {
-        private double distance2D(NodePos other) {
-            double dx = x - other.x;
-            double dz = z - other.z;
-            return Math.sqrt(dx * dx + dz * dz);
-        }
-    }
+    private record NodePos(double x, double z) {}
 
-    private record NodeF(String node, double fScore) {
-    }
+    private record NodeF(String node, double fScore) {}
 
     public record StopDistance(String stopId, double distance) {
     }

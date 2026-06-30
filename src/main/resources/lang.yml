@@ -4,10 +4,20 @@ command:
   reloaded: "<prefix><green>Directions config reloaded."
   stopped: "<prefix><green>Directions navigation stopped."
   started-header: "<prefix><white>Here is how to get to <green><destination></green>!"
-  started-navigation: "<prefix><white>Navigation started."
-  usage: "<prefix><red>Usage: /directions start <region> | /directions start at <x> <z> | /directions start at <x> <y> <z> | /directions stop | /directions reload"
+  started-navigation: "<prefix><white>Navigation started to <green><destination></green>."
+  usage: "<prefix><red>Usage: /directions <region> | /directions stop | /directions reload"
   only-player: "<prefix><red>Only players can run this command."
   no-permission: "<prefix><red>You do not have permission."
+
+gps:
+  started: "<prefix><white>GPS set to <green><destination></green>. Follow the arrow."
+  stopped: "<prefix><green>GPS stopped."
+  usage: "<prefix><red>Usage: /gps <region> | /gps stop"
+
+compass:
+  started: "<prefix><white>Compass set to <green><destination></green>. Follow the arrow."
+  stopped: "<prefix><green>Compass stopped."
+  usage: "<prefix><red>Usage: /compass <x> <z> | /compass <x> <y> <z> | /compass transit <x> <z> | /compass transit <x> <y> <z> | /compass stop"
 
 errors:
   region-manager-unavailable: "<prefix><red>WorldGuard region manager is unavailable for this world."
@@ -22,18 +32,20 @@ errors:
 
 directions:
   direct-walk: "<white>  <step>. Walk directly to <green><destination></green> <grey>(<distance> blocks <direction>)</grey>."
-  walk-to-stop: "<white>  <step>. Walk to <green><to></green> <grey>(<hint>)</grey>."
-  take-line: "<white>  <step>. Take <aqua><line></aqua> from <green><from></green> to <green><to></green>."
-  walk-between-stops: "<white>  <step>. Walk from <green><from></green> to <green><to></green>."
-  walk-to-destination: "<white>  <step>. Walk to <green><destination></green> from <green><from></green>."
+  walk-to-stop: "<white>  <step>. Walk to <to> <grey>(<hint>)</grey>."
+  take-line: "<white>  <step>. Take <line> from <from> to <to>."
+  walk-between-stops: "<white>  <step>. Walk from <from> to <to>."
+  walk-to-destination: "<white>  <step>. Walk to <destination> from <from>."
   warn-start-fallback: "<yellow>  ⚠ No nearby starting stop found; using nearest stop."
   warn-destination-fallback: "<yellow>  ⚠ Destination has no nearby stop; using nearest stop."
+  gps-fallback: "<prefix><yellow>No transit route available to <destination>. Follow the direct arrow instead."
+  switch-to-direct: "<gray>  Prefer a direct arrow? <click:run_command:'<command>'><aqua>Switch to GPS</aqua></click> <dark_gray>(<command>)</dark_gray>"
 
 navigation:
-  next-stop: "<prefix><white>Next stop: <green><stop></green>"
-  next-stop-with-line: "<prefix><white>Next stop: <green><stop></green> <gray>(<line>)</gray>"
-  upcoming-next-stop: "<prefix><white>Get ready. Next stop to catch: <green><stop></green>"
-  upcoming-next-stop-with-line: "<prefix><white>Get ready. Next stop to catch: <green><stop></green> <gray>(<line>)</gray>"
-  next-destination: "<prefix><white>Now walk to <green><stop></green>."
-  upcoming-destination: "<prefix><white>Get ready to walk to <green><stop></green>."
+  next-stop: "<prefix><white>Next stop: <stop>"
+  next-stop-with-line: "<prefix><white>Next stop: <stop> <gray>(<line>)</gray>"
+  upcoming-next-stop: "<prefix><white>Get ready. Next stop to catch: <stop>"
+  upcoming-next-stop-with-line: "<prefix><white>Get ready. Next stop to catch: <stop> <gray>(<line>)</gray>"
+  next-destination: "<prefix><white>Now walk to <stop>."
+  upcoming-destination: "<prefix><white>Get ready to walk to <stop>."
   arrived: "<prefix><green>You have arrived at <destination>."

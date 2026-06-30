@@ -2,6 +2,10 @@ package com.minecraftcitiesnetwork.directions;
 
 import com.minecraftcitiesnetwork.directions.command.DirectionsCommand;
 import com.minecraftcitiesnetwork.directions.command.DirectionsBrigadierRegistrar;
+import com.minecraftcitiesnetwork.directions.command.CompassCommand;
+import com.minecraftcitiesnetwork.directions.command.CompassBrigadierRegistrar;
+import com.minecraftcitiesnetwork.directions.command.GpsCommand;
+import com.minecraftcitiesnetwork.directions.command.GpsBrigadierRegistrar;
 import com.minecraftcitiesnetwork.directions.config.ConfigLoader;
 import com.minecraftcitiesnetwork.directions.graph.TransitGraph;
 import com.minecraftcitiesnetwork.directions.i18n.LangService;
@@ -24,6 +28,10 @@ public class DirectionsPlugin extends JavaPlugin {
 
         DirectionsCommand command = new DirectionsCommand(this);
         new DirectionsBrigadierRegistrar(this, command).register();
+        GpsCommand gpsCommand = new GpsCommand(this);
+        new GpsBrigadierRegistrar(this, gpsCommand).register();
+        CompassCommand compassCommand = new CompassCommand(this, command);
+        new CompassBrigadierRegistrar(this, compassCommand).register();
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.minecraftcitiesnetwork.directions.config;
 
+import com.minecraftcitiesnetwork.directions.model.CostModel;
 import com.minecraftcitiesnetwork.directions.model.Line;
 import com.minecraftcitiesnetwork.directions.model.Stop;
 import org.junit.jupiter.api.Test;
@@ -21,10 +22,11 @@ class LoadedDataDisplayNameTest {
                 5.0,
                 5.0,
                 "Next: <stop>  <remaining>m",
+                "Destination: <stop>  <remaining>m",
                 "shared-mode-only",
                 Map.of("reveille_metro_line_churchill", "Churchill Line"),
                 Map.of("rev-train-capital", "Capital Station"),
-                List.of(new Line("reveille_metro_line_churchill", "train", List.of("rev-train-capital"))),
+                List.of(new Line("reveille_metro_line_churchill", "train", CostModel.DISTANCE, List.of("rev-train-capital"))),
                 Map.of("rev-train-capital", new Stop("rev-train-capital", "world", 0, 0, Set.of("reveille_metro_line_churchill")))
         );
 
@@ -42,6 +44,7 @@ class LoadedDataDisplayNameTest {
                 5.0,
                 5.0,
                 "Next: <stop>  <remaining>m",
+                "Destination: <stop>  <remaining>m",
                 "shared-mode-only",
                 Map.of(),
                 Map.of(),
