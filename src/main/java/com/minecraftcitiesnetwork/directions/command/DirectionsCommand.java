@@ -90,14 +90,8 @@ public class DirectionsCommand {
         }
 
         DestinationResolver.Destination destination = destinationResolver.resolve(target);
-        ProtectedRegion navRegion = regionManager.getRegion(destination.navigationRegionId());
-        if (navRegion == null) {
-            lang.send(player, "errors.destination-unavailable", lang.placeholderRaw("prefix", lang.raw("prefix")));
-            return;
-        }
-
-        double destX = (navRegion.getMinimumPoint().x() + navRegion.getMaximumPoint().x()) / 2.0;
-        double destZ = (navRegion.getMinimumPoint().z() + navRegion.getMaximumPoint().z()) / 2.0;
+        double destX = destination.x();
+        double destZ = destination.z();
         Waypoint finalWaypoint = new Waypoint.Region(destination.requestedRegionId());
         routeAndNavigate(player, regionManager, destX, destZ, finalWaypoint);
     }

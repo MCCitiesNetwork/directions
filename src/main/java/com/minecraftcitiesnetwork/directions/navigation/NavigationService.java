@@ -192,9 +192,16 @@ public class NavigationService implements Listener {
                 if (protectedRegion == null) {
                     yield null;
                 }
-                double tx = (protectedRegion.getMinimumPoint().x() + protectedRegion.getMaximumPoint().x()) / 2.0;
-                double tz = (protectedRegion.getMinimumPoint().z() + protectedRegion.getMaximumPoint().z()) / 2.0;
-                yield new Location(playerLoc.getWorld(), tx, playerLoc.getY(), tz);
+                var min = protectedRegion.getMinimumPoint();
+                var max = protectedRegion.getMaximumPoint();
+                var world = playerLoc.getWorld();
+                double tx = (min.x() + max.x()) / 2.0;
+                double tz = (min.z() + max.z()) / 2.0;
+                // Full-height regions have no meaningful Y, so keep the arrow flat (player's Y).
+                // Bounded sub-regions point toward their actual centre height.
+                boolean fullHeight = min.y() <= world.getMinHeight() && max.y() >= world.getMaxHeight() - 1;
+                double ty = fullHeight ? playerLoc.getY() : (min.y() + max.y()) / 2.0;
+                yield new Location(world, tx, ty, tz);
             }
         };
     }

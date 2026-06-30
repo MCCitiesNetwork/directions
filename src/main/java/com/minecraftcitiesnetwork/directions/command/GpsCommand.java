@@ -65,12 +65,6 @@ public class GpsCommand {
         }
 
         DestinationResolver.Destination destination = destinationResolver.resolve(target);
-        ProtectedRegion navRegion = regionManager.getRegion(destination.navigationRegionId());
-        if (navRegion == null) {
-            lang.send(player, "errors.destination-unavailable", lang.placeholderRaw("prefix", lang.raw("prefix")));
-            return;
-        }
-
         Waypoint finalWaypoint = new Waypoint.Region(destination.requestedRegionId());
         startDirectNavigation(player, finalWaypoint);
     }
