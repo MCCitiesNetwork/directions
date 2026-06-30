@@ -1,5 +1,6 @@
 package com.minecraftcitiesnetwork.directions.graph;
 
+import com.minecraftcitiesnetwork.directions.model.CostModel;
 import com.minecraftcitiesnetwork.directions.model.Line;
 import com.minecraftcitiesnetwork.directions.model.RouteResult;
 import com.minecraftcitiesnetwork.directions.model.Stop;
@@ -45,7 +46,7 @@ public class TransitGraph {
             stopTransitKinds.put(stop.regionId(), new HashSet<>());
         }
 
-        this.hasFixedCostLines = lines.stream().anyMatch(l -> l.costModel().equals("fixed"));
+        this.hasFixedCostLines = lines.stream().anyMatch(l -> l.costModel() == CostModel.FIXED);
         indexStopTransitKinds(lines);
         buildTransitEdges(lines, transferPenalty);
         buildWalkingEdges();
@@ -124,7 +125,7 @@ public class TransitGraph {
                 if (a == null || b == null || !a.worldName().equalsIgnoreCase(b.worldName())) {
                     continue;
                 }
-                double cost = line.costModel().equals("fixed") ? transferPenalty : a.distance2D(b) + transferPenalty;
+                double cost = line.costModel() == CostModel.FIXED ? transferPenalty : a.distance2D(b) + transferPenalty;
                 addBidirectionalEdge(staticAdjacency, a.regionId(), b.regionId(), cost);
                 transitEdges.add(edgeKey(a.regionId(), b.regionId()));
                 transitEdges.add(edgeKey(b.regionId(), a.regionId()));

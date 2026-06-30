@@ -5,6 +5,7 @@ import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldguard.WorldGuard;
 import com.sk89q.worldguard.protection.managers.RegionManager;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
+import com.minecraftcitiesnetwork.directions.model.CostModel;
 import com.minecraftcitiesnetwork.directions.model.Line;
 import com.minecraftcitiesnetwork.directions.model.Stop;
 import org.bukkit.Bukkit;
@@ -109,10 +110,9 @@ public class ConfigLoader {
                 if (!type.equals("bus") && !type.equals("train")) {
                     throw new IllegalStateException("Line '" + lineId + "' has invalid type '" + type + "'. Use bus or train.");
                 }
-                String costModel = (lineSection.costModel == null ? "distance" : lineSection.costModel).toLowerCase(Locale.ROOT);
-                if (!costModel.equals("distance") && !costModel.equals("fixed")) {
-                    throw new IllegalStateException("Line '" + lineId + "' has invalid cost-model '" + costModel + "'. Use distance or fixed.");
-                }
+                CostModel costModel = CostModel.fromConfig(lineSection.costModel)
+                        .orElseThrow(() -> new IllegalStateException("Line '" + lineId
+                                + "' has invalid cost-model '" + lineSection.costModel + "'. Use distance or fixed."));
 
                 List<String> stops = new ArrayList<>();
                 for (String stop : lineSection.stops == null ? List.<String>of() : lineSection.stops) {

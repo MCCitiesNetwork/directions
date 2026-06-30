@@ -1,5 +1,6 @@
 package com.minecraftcitiesnetwork.directions.graph;
 
+import com.minecraftcitiesnetwork.directions.model.CostModel;
 import com.minecraftcitiesnetwork.directions.model.Line;
 import com.minecraftcitiesnetwork.directions.model.RouteResult;
 import com.minecraftcitiesnetwork.directions.model.Stop;
@@ -21,8 +22,8 @@ class TransitGraphWalkingPolicyTest {
         TransitGraph graph = new TransitGraph(
                 List.of(bus, train),
                 List.of(
-                        new Line("bus-line", "bus", "distance", List.of("bus-stop")),
-                        new Line("train-line", "train", "distance", List.of("train-stop"))
+                        new Line("bus-line", "bus", CostModel.DISTANCE, List.of("bus-stop")),
+                        new Line("train-line", "train", CostModel.DISTANCE, List.of("train-stop"))
                 ),
                 50.0,
                 150.0,
@@ -46,8 +47,8 @@ class TransitGraphWalkingPolicyTest {
         TransitGraph graph = new TransitGraph(
                 List.of(bus, train),
                 List.of(
-                        new Line("bus-line", "bus", "distance", List.of("bus-stop")),
-                        new Line("train-line", "train", "distance", List.of("train-stop"))
+                        new Line("bus-line", "bus", CostModel.DISTANCE, List.of("bus-stop")),
+                        new Line("train-line", "train", CostModel.DISTANCE, List.of("train-stop"))
                 ),
                 50.0,
                 150.0,
