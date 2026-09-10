@@ -1,3 +1,5 @@
+import java.time.Duration
+
 plugins {
     java
     id("com.gradleup.shadow") version "8.3.5"
@@ -105,7 +107,7 @@ tasks {
                 }
                 copy { from(sampleData.resolve("worldguard/regions.yml")); into(run.resolve("plugins/WorldGuard/worlds/Reveille")) }
                 copy { from(sampleData.resolve("config")); into(run.resolve("plugins/Directions")) }
-                run.resolve("server.properties").writeText("level-name=Reveille\nonline-mode=false\nspawn-protection=0\nview-distance=8\nsimulation-distance=4\n")
+                run.resolve("server.properties").writeText("level-name=Reveille\nonline-mode=false\nspawn-protection=0\nview-distance=8\nsimulation-distance=4\nallow-nether=false\n")
             } else if (!run.resolve("server.properties").exists()) {
                 run.resolve("server.properties").writeText("online-mode=false\nspawn-protection=0\n")
             }
@@ -116,8 +118,9 @@ tasks {
         minecraftVersion("1.21.8")
         runDirectory.set(file("run"))
         downloadPlugins {
-            modrinth("worldguard", "7.0.14")
-            modrinth("worldedit", "7.3.19")
+            // Direct Bukkit builds: Modrinth publishes Fabric jars under the same version numbers.
+            url("https://cdn.modrinth.com/data/1u6JkXh5/versions/Jk1z2u7n/worldedit-bukkit-7.3.16.jar")
+            url("https://cdn.modrinth.com/data/DKY9btbd/versions/PO4MKx7e/worldguard-bukkit-7.0.14-dist.jar")
         }
         jvmArgs("-Dcom.mojang.eula.agree=true", "-Xmx4G")
         dependsOn("prepareRunDir")
@@ -137,10 +140,12 @@ tasks {
         runDirectory.set(smokeDir)
         pluginJars.from(shadowJar.flatMap { it.archiveFile })
         downloadPlugins {
-            modrinth("worldguard", "7.0.14")
-            modrinth("worldedit", "7.3.19")
+            // Direct Bukkit builds: Modrinth publishes Fabric jars under the same version numbers.
+            url("https://cdn.modrinth.com/data/1u6JkXh5/versions/Jk1z2u7n/worldedit-bukkit-7.3.16.jar")
+            url("https://cdn.modrinth.com/data/DKY9btbd/versions/PO4MKx7e/worldguard-bukkit-7.0.14-dist.jar")
         }
         args("--nogui")
+        timeout.set(Duration.ofMinutes(10))
         jvmArgs(
             "-Dcom.mojang.eula.agree=true",
             "-Xmx3G",
@@ -151,7 +156,7 @@ tasks {
             smokeDir.mkdirs()
             smokeDir.resolve("eula.txt").writeText("eula=true\n")
             if (!smokeDir.resolve("server.properties").exists()) {
-                smokeDir.resolve("server.properties").writeText("online-mode=false\nspawn-protection=0\nview-distance=6\nsimulation-distance=4\nlevel-type=minecraft\\:flat\n")
+                smokeDir.resolve("server.properties").writeText("online-mode=false\nspawn-protection=0\nview-distance=6\nsimulation-distance=4\nallow-nether=false\n")
             }
             smokeReport.delete()
         }

@@ -36,6 +36,7 @@ public final class SelfTestRunner {
 
     private final JavaPlugin plugin;
     private final WalkPathService service;
+    private boolean finished;
 
     public SelfTestRunner(JavaPlugin plugin, WalkPathService service) {
         this.plugin = plugin;
@@ -48,6 +49,13 @@ public final class SelfTestRunner {
 
     public void start() {
         Bukkit.getScheduler().runTaskLater(plugin, this::run, 40L);
+        // Watchdog: never leave a headless server running if something stalls.
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!finished) {
+                plugin.getLogger().severe("SELFTEST watchdog: scenarios did not finish in time; shutting down");
+                finish(new ArrayList<>(List.of(new Outcome(new Scenario("watchdog", "", null, null, "found", 0, 0, List.of()), null, false, "timed out"))));
+            }
+        }, 20L * 60 * 5);
     }
 
     private void run() {
@@ -136,6 +144,10 @@ public final class SelfTestRunner {
     }
 
     private void finish(List<Outcome> outcomes) {
+        if (finished) {
+            return;
+        }
+        finished = true;
         long failed = outcomes.stream().filter(o -> !o.ok).count();
         StringBuilder report = new StringBuilder("{\"passed\":").append(outcomes.size() - failed)
                 .append(",\"failed\":").append(failed).append(",\"results\":[");

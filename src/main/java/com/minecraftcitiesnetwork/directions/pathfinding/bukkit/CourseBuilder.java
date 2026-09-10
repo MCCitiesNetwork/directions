@@ -44,6 +44,12 @@ public final class CourseBuilder {
         }
         world.setSpawnLocation(2, 65, 2);
         plugin.getLogger().info("SELFTEST building course in " + WORLD_NAME);
+        // Keep the whole course loaded: nothing else holds these chunks in a headless server.
+        for (int cx = -1; cx <= 5; cx++) {
+            for (int cz = -1; cz <= 5; cz++) {
+                world.addPluginChunkTicket(cx, cz, plugin);
+            }
+        }
 
         fill(world, 0, 64, 0, 79, 64, 79, Material.STONE);
         fill(world, 30, 64, 0, 32, 64, 79, Material.WATER);

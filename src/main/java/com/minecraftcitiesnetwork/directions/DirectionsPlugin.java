@@ -36,7 +36,7 @@ public class DirectionsPlugin extends JavaPlugin {
         boolean selfTest = SelfTestRunner.requested();
         try {
             reloadDirectionsData();
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | LinkageError e) {
             if (!selfTest) {
                 throw e;
             }
