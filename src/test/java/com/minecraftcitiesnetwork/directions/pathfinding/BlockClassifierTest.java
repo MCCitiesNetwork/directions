@@ -38,11 +38,23 @@ class BlockClassifierTest {
     }
 
     @Test
-    void fullBlocksAndBarriersAreSolid() {
-        for (String n : new String[]{"STONE", "OAK_FENCE", "COBBLESTONE_WALL", "GLASS_PANE", "IRON_BARS",
-                "OAK_SLAB", "OAK_STAIRS", "SNOW_BLOCK", "TUBE_CORAL_BLOCK", "RED_MUSHROOM_BLOCK", "CHEST", "LANTERN"}) {
+    void fullBlocksAreSolid() {
+        for (String n : new String[]{"STONE", "OAK_SLAB", "OAK_STAIRS", "SNOW_BLOCK", "TUBE_CORAL_BLOCK",
+                "RED_MUSHROOM_BLOCK", "CHEST", "LANTERN", "STONE_BRICK_WALL_X"}) {
             assertEquals(BlockFlags.SOLID, c.classify(n), n);
         }
+    }
+
+    @Test
+    void fencesWallsPanesAndBarsAreTall() {
+        for (String n : new String[]{"OAK_FENCE", "NETHER_BRICK_FENCE", "COBBLESTONE_WALL", "GLASS_PANE",
+                "RED_STAINED_GLASS_PANE", "IRON_BARS"}) {
+            assertEquals(BlockFlags.TALL, c.classify(n), n);
+        }
+        // Wall-mounted decorations are not walls.
+        assertEquals(BlockFlags.PASSABLE, c.classify("OAK_WALL_SIGN"));
+        assertEquals(BlockFlags.PASSABLE, c.classify("WALL_TORCH"));
+        assertEquals(BlockFlags.PASSABLE, c.classify("RED_WALL_BANNER"));
     }
 
     @Test

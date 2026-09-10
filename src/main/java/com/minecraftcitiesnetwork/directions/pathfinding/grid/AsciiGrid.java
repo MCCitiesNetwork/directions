@@ -25,7 +25,7 @@ import java.util.TreeMap;
  * therefore only has to draw the cells the walker moves through.
  *
  * <p>Symbols: {@code #} solid, {@code .} air, {@code ~} water, {@code D} door, {@code L} ladder,
- * {@code X} hazard, {@code ?} unloaded, {@code S} start (air), {@code T} target (air).
+ * {@code X} hazard, {@code ?} unloaded, {@code |} fence, {@code S} start (air), {@code T} target (air).
  */
 public final class AsciiGrid {
     /** Cells added above the top drawn layer; solid columns extend through them. */
@@ -102,6 +102,7 @@ public final class AsciiGrid {
                         case 'L' -> BlockFlags.CLIMBABLE;
                         case 'X' -> BlockFlags.HAZARD;
                         case '?' -> BlockFlags.UNLOADED;
+                        case '|' -> BlockFlags.TALL;
                         default -> throw new IllegalArgumentException("unknown symbol '" + c + "' at x=" + x + " z=" + z + " y=" + y);
                     };
                     grid.set(x, y, z, f);

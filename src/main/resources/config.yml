@@ -15,6 +15,60 @@ gps-bossbar-format: "Destination: <stop>  <remaining>m"
 # shared-mode-only: only allow walking edges when both stops share bus/train mode
 walking-transfer-policy: shared-mode-only
 
+# Block-level walking paths (Pathetic A* engine). When disabled, or whenever a search fails or
+# runs out of time, Directions falls back to the straight-line behaviour everywhere.
+pathfinding:
+  enabled: false
+  # Empty = every world. Otherwise only these worlds get walking paths.
+  worlds: []
+  routing:
+    # Use real walking distances for the legs to the first stop, from the last stop, and between stops.
+    enabled: true
+    # Legs longer than this (straight line, blocks) stay straight-line estimates.
+    max-leg-distance: 300
+    # Wall-clock budget per search while routing a request.
+    time-budget-ms: 250
+    # At reload, precompute walking distances between nearby stops in the background.
+    precompute-stop-edges: true
+  guidance:
+    # The arrow follows the walking path instead of pointing straight at the waypoint.
+    enabled: true
+    # How many blocks ahead along the path the arrow points.
+    look-ahead: 6
+    # Distance from the path (blocks) that triggers a new search.
+    replan-distance: 8
+    replan-cooldown-ms: 2000
+    # Beyond this straight-line distance the arrow falls back to pointing straight at the waypoint.
+    max-search-distance: 600
+    time-budget-ms: 400
+  walker:
+    height: 2
+    step-up: true
+    max-drop: 3
+    can-swim: true
+    # Multipliers on the cost of moving into a door/gate/trapdoor, into water, or up a ladder. Must be >= 1.
+    door-cost: 1.5
+    water-cost: 2.5
+    climb-cost: 2.0
+    # How far a start or destination may be moved to the nearest standing spot.
+    snap-radius: 6
+  engine:
+    threads: 2
+    max-iterations: 200000
+  chunks:
+    # Chunk snapshots are taken on the main thread, at most this many per tick.
+    snapshots-per-tick: 8
+    # Read generated-but-unloaded chunks straight from region files, off the main thread.
+    disk-reader: true
+    # Blocks of height kept per chunk around the surface (about 16 KB per chunk at 64).
+    flag-band-height: 64
+    cache-max-chunks: 2048
+    cache-idle-seconds: 90
+    unloaded-retry-seconds: 60
+  debug:
+    particles: false
+    log-searches: false
+
 # Demo network:
 # - Replace these IDs with your own WorldGuard region IDs.
 # - Keep at least one line with one or more stops.

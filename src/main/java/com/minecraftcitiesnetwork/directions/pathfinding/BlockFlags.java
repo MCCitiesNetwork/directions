@@ -21,6 +21,8 @@ public final class BlockFlags {
     public static final byte HAZARD = 32;
     /** Unknown: chunk not available. Never entered. */
     public static final byte UNLOADED = 64;
+    /** Fences, walls, panes, bars: too tall to step onto, too thin to stand on. Never entered. */
+    public static final byte TALL = (byte) 0x80;
 
     private BlockFlags() {
     }
@@ -59,6 +61,7 @@ public final class BlockFlags {
             case CLIMBABLE -> 'L';
             case HAZARD -> 'X';
             case UNLOADED -> '?';
+            case TALL -> '|';
             default -> '!';
         };
     }
@@ -72,6 +75,7 @@ public final class BlockFlags {
             case CLIMBABLE -> "CLIMBABLE";
             case HAZARD -> "HAZARD";
             case UNLOADED -> "UNLOADED";
+            case TALL -> "TALL";
             default -> "INVALID(" + f + ")";
         };
     }

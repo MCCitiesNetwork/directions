@@ -39,6 +39,8 @@ directions:
   warn-start-fallback: "<yellow>  ⚠ No nearby starting stop found; using nearest stop."
   warn-destination-fallback: "<yellow>  ⚠ Destination has no nearby stop; using nearest stop."
   gps-fallback: "<prefix><yellow>No transit route available to <destination>. Follow the direct arrow instead."
+  walk-hint-path: "about <distance> blocks on foot, heading <direction>"
+  walk-hint-line: "<distance> blocks <direction>"
   switch-to-direct: "<gray>  Prefer a direct arrow? <click:run_command:'<command>'><aqua>Switch to GPS</aqua></click> <dark_gray>(<command>)</dark_gray>"
 
 navigation:
@@ -49,3 +51,13 @@ navigation:
   next-destination: "<prefix><white>Now walk to <stop>."
   upcoming-destination: "<prefix><white>Get ready to walk to <stop>."
   arrived: "<prefix><green>You have arrived at <destination>."
+
+debug:
+  disabled: "<prefix><red>Pathfinding is disabled in config.yml."
+  path-started: "<prefix><gray>Searching for a walking path to <white><target></white>..."
+  path-result: "<prefix><white><result>"
+  capture-started: "<prefix><gray>Capturing terrain flags within <radius> blocks..."
+  capture-done: "<prefix><green>Captured <size> blocks to <white><file></white> (<bytes> bytes). Local origin offset: <white><offset></white>."
+  capture-failed: "<prefix><red>Capture failed: <error>"
+  flags: "<prefix><white>Flags around <at> (@ = you, # solid, . air, ~ water, D door, L ladder, X hazard, | fence, ? unloaded):\n<gray><grid>"
+  stats: "<prefix><white>Pathfinding stats:\n<gray><stats>"

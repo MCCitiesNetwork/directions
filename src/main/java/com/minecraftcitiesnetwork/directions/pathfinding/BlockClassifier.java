@@ -12,7 +12,7 @@ import java.util.function.Predicate;
  * serves both the live chunk snapshot decoder and the region-file reader with one set of rules.
  *
  * <p>Ordering matters: hazards first, then liquids, climbables and openables, then the explicit
- * passable table, then an optional runtime oracle (Paper's {@code Material#isSolid}) for anything
+ * passable table, then fence-like blocks that are too tall to step onto, then an optional runtime oracle (Paper's {@code Material#isSolid}) for anything
  * not named here, and finally a conservative {@code SOLID} default.
  */
 public final class BlockClassifier {
@@ -107,6 +107,9 @@ public final class BlockClassifier {
             if (name.endsWith(suffix)) {
                 return BlockFlags.PASSABLE;
             }
+        }
+        if (name.endsWith("_FENCE") || name.endsWith("_WALL") || name.endsWith("_PANE") || name.equals("IRON_BARS")) {
+            return BlockFlags.TALL;
         }
         if (solidOracle != null) {
             return solidOracle.test(name) ? BlockFlags.SOLID : BlockFlags.PASSABLE;

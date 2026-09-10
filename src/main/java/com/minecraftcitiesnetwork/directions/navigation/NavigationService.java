@@ -2,6 +2,10 @@ package com.minecraftcitiesnetwork.directions.navigation;
 
 import com.minecraftcitiesnetwork.directions.DirectionsPlugin;
 import com.minecraftcitiesnetwork.directions.i18n.LangService;
+import com.minecraftcitiesnetwork.directions.pathfinding.PathfindingSettings;
+import com.minecraftcitiesnetwork.directions.pathfinding.Pos;
+import com.minecraftcitiesnetwork.directions.pathfinding.WalkPath;
+import com.minecraftcitiesnetwork.directions.pathfinding.bukkit.WalkPathService;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldguard.WorldGuard;
 import com.sk89q.worldguard.protection.managers.RegionManager;
@@ -75,10 +79,19 @@ public class NavigationService implements Listener {
     }
 
     public void startGpsNavigation(Player player, List<Waypoint> waypoints) {
-        startNavigation(player, waypoints, true);
+        startNavigation(player, waypoints, true, null);
+    }
+
+    /** Starts navigation with a walking path already known for the first leg. */
+    public void startNavigation(Player player, List<Waypoint> waypoints, WalkPath firstLegPath) {
+        startNavigation(player, waypoints, false, firstLegPath);
     }
 
     private void startNavigation(Player player, List<Waypoint> waypoints, boolean gps) {
+        startNavigation(player, waypoints, gps, null);
+    }
+
+    private void startNavigation(Player player, List<Waypoint> waypoints, boolean gps, WalkPath firstLegPath) {
         stopNavigation(player);
         if (waypoints.isEmpty()) {
             return;
@@ -89,6 +102,9 @@ public class NavigationService implements Listener {
 
         List<ArmorStand> arrowStands = new ArrayList<>();
         Session session = new Session(plugin, player.getUniqueId(), waypoints, 0, arrowStands, bossBar, gps);
+        if (firstLegPath != null) {
+            session.setPath(firstLegPath);
+        }
         sessions.put(player.getUniqueId(), session);
         applyVisibility(session);
     }
@@ -174,10 +190,101 @@ public class NavigationService implements Listener {
             if (targetLoc == null) {
                 continue;
             }
+            Location arrowTarget = targetLoc;
+            double pathRemaining = -1;
+            WalkPathService service = plugin.getWalkPathService();
+            if (service != null && service.settings().guidanceEnabledIn(player.getWorld().getName())) {
+                PathfindingSettings.Guidance guidance = service.settings().guidance();
+                maintainPath(session, player, regionManager, currentTarget, service);
+                WalkPath path = session.path();
+                if (path != null) {
+                    Location p = player.getLocation();
+                    int cursor = path.nearestIndex(p.getX(), p.getY(), p.getZ(), session.pathCursor());
+                    session.setPathCursor(cursor);
+                    Pos ahead = path.lookAhead(cursor, guidance.lookAhead());
+                    arrowTarget = new Location(p.getWorld(), ahead.centerX(), ahead.y() + 1.0, ahead.centerZ());
+                    pathRemaining = path.remainingFrom(cursor, p.getX(), p.getZ());
+                    if (path.distanceToNode(cursor, p.getX(), p.getZ()) > guidance.replanDistance()) {
+                        requestPath(session, player, regionManager, currentTarget, service, true);
+                    }
+                }
+            }
             maybeSendUpcomingStopHint(player, session, regionManager, currentTarget, targetLoc);
-            updateArrow(player, session, targetLoc);
-            updateBossbar(session, currentTarget, player.getLocation(), targetLoc);
+            updateArrow(player, session, arrowTarget);
+            updateBossbar(session, currentTarget, player.getLocation(), targetLoc, pathRemaining);
         }
+    }
+
+    /** Drops a path that belongs to a finished leg and asks for one when the current leg has none. */
+    private void maintainPath(Session session, Player player, RegionManager regionManager, Waypoint target, WalkPathService service) {
+        if (session.pathLeg() != session.index()) {
+            session.setPath(null);
+            session.setPathLeg(session.index());
+            session.setPlanFailures(0);
+        }
+        if (session.path() == null) {
+            requestPath(session, player, regionManager, target, service, false);
+        }
+    }
+
+    private void requestPath(Session session, Player player, RegionManager regionManager, Waypoint target,
+                             WalkPathService service, boolean replan) {
+        PathfindingSettings.Guidance guidance = service.settings().guidance();
+        long now = System.nanoTime();
+        if (session.planInFlight() || now - session.lastPlanNanos() < guidance.replanCooldown().toNanos()) {
+            return;
+        }
+        if (!replan && session.planFailures() >= 3) {
+            return; // this leg falls back to the straight arrow
+        }
+        Pos to = destinationCell(player, regionManager, target);
+        if (to == null) {
+            return;
+        }
+        Location p = player.getLocation();
+        Pos from = Pos.floor(p.getX(), p.getY(), p.getZ());
+        int leg = session.index();
+        session.setPlanInFlight(true);
+        session.setLastPlanNanos(now);
+        service.find(player.getWorld(), from, to, guidance.maxSearchDistance(), guidance.timeBudget()).thenAccept(result -> {
+            session.setPlanInFlight(false);
+            if (sessions.get(session.playerId()) != session || session.index() != leg) {
+                return;
+            }
+            if (result.found()) {
+                session.setPath(result.path());
+                session.setPlanFailures(0);
+            } else {
+                session.setPlanFailures(session.planFailures() + 1);
+            }
+        });
+    }
+
+    /**
+     * The cell the walker should aim for: the closest point of a region's footprint to the player,
+     * at the region's height when it has one, or the coordinate destination. Columns given at the
+     * world's top are resolved to their surface by the search.
+     */
+    private static Pos destinationCell(Player player, RegionManager regionManager, Waypoint waypoint) {
+        Location p = player.getLocation();
+        var world = p.getWorld();
+        return switch (waypoint) {
+            case Waypoint.Coordinates coords ->
+                    Pos.floor(coords.x(), coords.includeY() ? coords.y() : world.getMaxHeight() - 1, coords.z());
+            case Waypoint.Region region -> {
+                ProtectedRegion protectedRegion = regionManager.getRegion(region.id());
+                if (protectedRegion == null) {
+                    yield null;
+                }
+                var min = protectedRegion.getMinimumPoint();
+                var max = protectedRegion.getMaximumPoint();
+                double x = Math.max(min.x(), Math.min(max.x(), p.getX()));
+                double z = Math.max(min.z(), Math.min(max.z(), p.getZ()));
+                boolean fullHeight = min.y() <= world.getMinHeight() && max.y() >= world.getMaxHeight() - 1;
+                double y = fullHeight ? world.getMaxHeight() - 1 : Math.max(min.y(), Math.min(max.y(), p.getY()));
+                yield Pos.floor(x, y, z);
+            }
+        };
     }
 
     private static Location targetLocation(Player player, RegionManager regionManager, Waypoint waypoint) {
@@ -224,8 +331,8 @@ public class NavigationService implements Listener {
         }
     }
 
-    private void updateBossbar(Session session, Waypoint waypoint, Location from, Location target) {
-        double remaining = switch (waypoint) {
+    private void updateBossbar(Session session, Waypoint waypoint, Location from, Location target, double pathRemaining) {
+        double remaining = pathRemaining >= 0 ? pathRemaining : switch (waypoint) {
             case Waypoint.Coordinates coords -> ArrivalPolicy.distanceToCoordinate(from, coords);
             case Waypoint.Region region -> {
                 RegionManager regionManager = WorldGuard.getInstance().getPlatform().getRegionContainer()

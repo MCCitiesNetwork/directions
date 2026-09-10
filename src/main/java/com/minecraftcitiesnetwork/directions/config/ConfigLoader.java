@@ -8,6 +8,8 @@ import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import com.minecraftcitiesnetwork.directions.model.CostModel;
 import com.minecraftcitiesnetwork.directions.model.Line;
 import com.minecraftcitiesnetwork.directions.model.Stop;
+import com.minecraftcitiesnetwork.directions.pathfinding.PathfindingSettings;
+import com.minecraftcitiesnetwork.directions.pathfinding.WalkerProfile;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -19,6 +21,7 @@ import org.spongepowered.configurate.yaml.NodeStyle;
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -86,6 +89,7 @@ public class ConfigLoader {
             if (!walkingTransferPolicy.equals("shared-mode-only") && !walkingTransferPolicy.equals("strict")) {
                 throw new IllegalStateException("Invalid walking-transfer-policy. Use 'shared-mode-only' or 'strict'.");
             }
+            PathfindingSettings pathfinding = readPathfinding(root.pathfinding == null ? new PathfindingSection() : root.pathfinding);
             Map<String, String> lineDisplayNames = readDisplayNameMap(namesRoot.lineDisplayNames);
             Map<String, String> stopDisplayNames = readDisplayNameMap(namesRoot.stopDisplayNames);
 
@@ -154,7 +158,8 @@ public class ConfigLoader {
                     lineDisplayNames,
                     stopDisplayNames,
                     lines,
-                    stops
+                    stops,
+                    pathfinding
             );
         } catch (ConfigurateException e) {
             throw new IllegalStateException("Failed to load config.yml with Configurate", e);
@@ -207,9 +212,36 @@ public class ConfigLoader {
             BlockVector3 max = region.getMaximumPoint();
             double cx = (min.x() + max.x()) / 2.0;
             double cz = (min.z() + max.z()) / 2.0;
-            return new Stop(stopId, world.getName(), cx, cz, lines);
+            boolean fullHeight = min.y() <= world.getMinHeight() && max.y() >= world.getMaxHeight() - 1;
+            double cy = fullHeight ? Double.NaN : (min.y() + max.y()) / 2.0;
+            return new Stop(stopId, world.getName(), cx, cy, cz, lines);
         }
         return null;
+    }
+
+    static PathfindingSettings readPathfinding(PathfindingSection s) {
+        try {
+            WalkerProfile walker = new WalkerProfile(
+                    s.walker.height, s.walker.stepUp, s.walker.maxDrop, s.walker.canSwim,
+                    s.walker.doorCost, s.walker.waterCost, s.walker.climbCost, s.walker.snapRadius);
+            return new PathfindingSettings(
+                    s.enabled,
+                    new HashSet<>(s.worlds == null ? List.of() : s.worlds),
+                    new PathfindingSettings.Routing(s.routing.enabled, s.routing.maxLegDistance,
+                            Duration.ofMillis(s.routing.timeBudgetMs), s.routing.precomputeStopEdges),
+                    new PathfindingSettings.Guidance(s.guidance.enabled, s.guidance.lookAhead, s.guidance.replanDistance,
+                            Duration.ofMillis(s.guidance.replanCooldownMs), s.guidance.maxSearchDistance,
+                            Duration.ofMillis(s.guidance.timeBudgetMs)),
+                    walker,
+                    new PathfindingSettings.Engine(s.engine.threads, s.engine.maxIterations),
+                    new PathfindingSettings.Chunks(s.chunks.snapshotsPerTick, s.chunks.diskReader, s.chunks.flagBandHeight,
+                            s.chunks.cacheMaxChunks, Duration.ofSeconds(s.chunks.cacheIdleSeconds),
+                            Duration.ofSeconds(s.chunks.unloadedRetrySeconds)),
+                    new PathfindingSettings.Debug(s.debug.particles, s.debug.logSearches)
+            );
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("Invalid pathfinding section in config.yml: " + e.getMessage(), e);
+        }
     }
 
     public record LoadedData(double transferPenalty,
@@ -224,7 +256,26 @@ public class ConfigLoader {
                              Map<String, String> lineDisplayNames,
                              Map<String, String> stopDisplayNames,
                              List<Line> lines,
-                             Map<String, Stop> stopsById) {
+                             Map<String, Stop> stopsById,
+                             PathfindingSettings pathfinding) {
+        public LoadedData(double transferPenalty,
+                          double maxWalkingDistance,
+                          double stopArrivalBuffer,
+                          double nextStopNotifyDistance,
+                          double departureClearanceRadius,
+                          double coordinateArrivalRadius,
+                          String bossbarFormat,
+                          String gpsBossbarFormat,
+                          String walkingTransferPolicy,
+                          Map<String, String> lineDisplayNames,
+                          Map<String, String> stopDisplayNames,
+                          List<Line> lines,
+                          Map<String, Stop> stopsById) {
+            this(transferPenalty, maxWalkingDistance, stopArrivalBuffer, nextStopNotifyDistance, departureClearanceRadius,
+                    coordinateArrivalRadius, bossbarFormat, gpsBossbarFormat, walkingTransferPolicy, lineDisplayNames,
+                    stopDisplayNames, lines, stopsById, PathfindingSettings.DISABLED);
+        }
+
         public String displayLine(String lineId) {
             String key = lineId.toLowerCase(Locale.ROOT);
             return lineDisplayNames.getOrDefault(key, humanize(key));
@@ -281,6 +332,108 @@ public class ConfigLoader {
         public String walkingTransferPolicy = "shared-mode-only";
         @Setting("lines")
         public Map<String, LineSection> lines = Collections.emptyMap();
+        @Setting("pathfinding")
+        public PathfindingSection pathfinding = new PathfindingSection();
+    }
+
+    @ConfigSerializable
+    public static final class PathfindingSection {
+        @Setting("enabled")
+        public boolean enabled = false;
+        @Setting("worlds")
+        public List<String> worlds = Collections.emptyList();
+        @Setting("routing")
+        public RoutingSection routing = new RoutingSection();
+        @Setting("guidance")
+        public GuidanceSection guidance = new GuidanceSection();
+        @Setting("walker")
+        public WalkerSection walker = new WalkerSection();
+        @Setting("engine")
+        public EngineSection engine = new EngineSection();
+        @Setting("chunks")
+        public ChunksSection chunks = new ChunksSection();
+        @Setting("debug")
+        public DebugSection debug = new DebugSection();
+    }
+
+    @ConfigSerializable
+    public static final class RoutingSection {
+        @Setting("enabled")
+        public boolean enabled = true;
+        @Setting("max-leg-distance")
+        public double maxLegDistance = 300;
+        @Setting("time-budget-ms")
+        public long timeBudgetMs = 250;
+        @Setting("precompute-stop-edges")
+        public boolean precomputeStopEdges = true;
+    }
+
+    @ConfigSerializable
+    public static final class GuidanceSection {
+        @Setting("enabled")
+        public boolean enabled = true;
+        @Setting("look-ahead")
+        public double lookAhead = 6;
+        @Setting("replan-distance")
+        public double replanDistance = 8;
+        @Setting("replan-cooldown-ms")
+        public long replanCooldownMs = 2000;
+        @Setting("max-search-distance")
+        public double maxSearchDistance = 600;
+        @Setting("time-budget-ms")
+        public long timeBudgetMs = 400;
+    }
+
+    @ConfigSerializable
+    public static final class WalkerSection {
+        @Setting("height")
+        public int height = 2;
+        @Setting("step-up")
+        public boolean stepUp = true;
+        @Setting("max-drop")
+        public int maxDrop = 3;
+        @Setting("can-swim")
+        public boolean canSwim = true;
+        @Setting("door-cost")
+        public double doorCost = 1.5;
+        @Setting("water-cost")
+        public double waterCost = 2.5;
+        @Setting("climb-cost")
+        public double climbCost = 2.0;
+        @Setting("snap-radius")
+        public int snapRadius = 6;
+    }
+
+    @ConfigSerializable
+    public static final class EngineSection {
+        @Setting("threads")
+        public int threads = 2;
+        @Setting("max-iterations")
+        public int maxIterations = 200_000;
+    }
+
+    @ConfigSerializable
+    public static final class ChunksSection {
+        @Setting("snapshots-per-tick")
+        public int snapshotsPerTick = 8;
+        @Setting("disk-reader")
+        public boolean diskReader = true;
+        @Setting("flag-band-height")
+        public int flagBandHeight = 64;
+        @Setting("cache-max-chunks")
+        public int cacheMaxChunks = 2048;
+        @Setting("cache-idle-seconds")
+        public int cacheIdleSeconds = 90;
+        @Setting("unloaded-retry-seconds")
+        public int unloadedRetrySeconds = 60;
+    }
+
+    @ConfigSerializable
+    public static final class DebugSection {
+        @Setting("particles")
+        public boolean particles = false;
+        @Setting("log-searches")
+        public boolean logSearches = false;
     }
 
     @ConfigSerializable

@@ -30,15 +30,21 @@ public final class WalkPathfinder {
         return profile;
     }
 
+    /** Nearest standing cell, or the surface of the column when the point is far above the ground. */
+    private Optional<Pos> resolve(BlockGrid grid, Pos p) {
+        return StandingPositions.snap(grid, profile, p)
+                .or(() -> StandingPositions.surface(grid, profile, p.x(), p.z(), grid.maxY() + 1));
+    }
+
     public WalkResult find(BlockGrid grid, WalkRequest request) {
         long t0 = System.nanoTime();
 
-        Optional<Pos> start = StandingPositions.snap(grid, profile, request.from());
+        Optional<Pos> start = resolve(grid, request.from());
         if (start.isEmpty()) {
             return WalkResult.of(WalkResult.Status.INVALID_START, null, null, System.nanoTime() - t0,
                     "no standing cell within " + profile.snapRadius() + " of " + request.from());
         }
-        Optional<Pos> target = StandingPositions.snap(grid, profile, request.to());
+        Optional<Pos> target = resolve(grid, request.to());
         if (target.isEmpty()) {
             return WalkResult.of(WalkResult.Status.INVALID_TARGET, start.get(), null, System.nanoTime() - t0,
                     "no standing cell within " + profile.snapRadius() + " of " + request.to());

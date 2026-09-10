@@ -1,0 +1,58 @@
+# Self-test scenarios on the synthetic course world (see CourseBuilder for the layout).
+# Feet level on the stone plate is y=65.
+course: true
+scenarios:
+  - name: corridor
+    from: [2, 65, 2]
+    to: [20, 65, 2]
+    expect: found
+    max-length: 20
+  - name: canal-swim-when-necessary
+    from: [20, 65, 10]
+    to: [40, 65, 10]
+    expect: found
+  - name: canal-prefers-bridge
+    from: [25, 65, 38]
+    to: [37, 65, 38]
+    expect: found
+    forbid: [[30, 64, 38], [31, 64, 38], [32, 64, 38]]
+  - name: wall-through-door
+    from: [45, 65, 20]
+    to: [55, 65, 20]
+    expect: found
+    max-length: 14
+  - name: wall-detour-to-door
+    from: [45, 65, 5]
+    to: [55, 65, 5]
+    expect: found
+    max-length: 50
+  - name: platform-step-up
+    from: [58, 65, 65]
+    to: [65, 66, 65]
+    expect: found
+  - name: cliff-too-high
+    from: [58, 65, 52]
+    to: [65, 67, 52]
+    expect: none
+  - name: fenced-yard-unreachable
+    from: [5, 65, 50]
+    to: [15, 65, 65]
+    expect: none
+  - name: ladder-tower
+    from: [2, 65, 10]
+    to: [5, 68, 5]
+    expect: found
+  - name: lava-avoided
+    from: [68, 65, 8]
+    to: [78, 65, 17]
+    expect: found
+    forbid: [[72, 64, 12], [73, 64, 12], [72, 65, 12]]
+  - name: sealed-box-unreachable
+    from: [70, 65, 72]
+    to: [77, 65, 77]
+    expect: none
+  - name: too-far-refused
+    from: [2, 65, 2]
+    to: [78, 65, 78]
+    max-distance: 50
+    expect: none

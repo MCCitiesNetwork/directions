@@ -1,6 +1,7 @@
 package com.minecraftcitiesnetwork.directions.navigation;
 
 import com.minecraftcitiesnetwork.directions.DirectionsPlugin;
+import com.minecraftcitiesnetwork.directions.pathfinding.WalkPath;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.ArmorStand;
 import org.jetbrains.annotations.Nullable;
@@ -18,6 +19,13 @@ final class Session implements SessionView {
     private final boolean gps;
     private double legStartDistance;
     private int upcomingHintSentForIndex;
+    // Guided navigation: the walking path for the current leg, if one has been found.
+    private WalkPath path;
+    private int pathCursor;
+    private int pathLeg = -1;
+    private long lastPlanNanos;
+    private boolean planInFlight;
+    private int planFailures;
 
     Session(DirectionsPlugin plugin, UUID playerId, List<Waypoint> waypoints, int index, List<ArmorStand> arrowStands, BossBar bossBar, boolean gps) {
         this.plugin = plugin;
@@ -109,5 +117,56 @@ final class Session implements SessionView {
 
     void advance() {
         index++;
+    }
+
+    @Nullable WalkPath path() {
+        return path;
+    }
+
+    void setPath(@Nullable WalkPath path) {
+        this.path = path;
+        this.pathCursor = 0;
+        this.pathLeg = index;
+    }
+
+    /** Which waypoint index the current path was computed for; -1 before any attempt. */
+    int pathLeg() {
+        return pathLeg;
+    }
+
+    void setPathLeg(int leg) {
+        this.pathLeg = leg;
+    }
+
+    int pathCursor() {
+        return pathCursor;
+    }
+
+    void setPathCursor(int cursor) {
+        this.pathCursor = cursor;
+    }
+
+    long lastPlanNanos() {
+        return lastPlanNanos;
+    }
+
+    void setLastPlanNanos(long nanos) {
+        this.lastPlanNanos = nanos;
+    }
+
+    boolean planInFlight() {
+        return planInFlight;
+    }
+
+    void setPlanInFlight(boolean inFlight) {
+        this.planInFlight = inFlight;
+    }
+
+    int planFailures() {
+        return planFailures;
+    }
+
+    void setPlanFailures(int failures) {
+        this.planFailures = failures;
     }
 }

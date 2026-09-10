@@ -18,6 +18,9 @@ permissions:
   directions.reload:
     description: Reload directions config
     default: op
+  directions.debug:
+    description: Pathfinding debug commands (path preview, terrain capture, stats)
+    default: op
   gps.use:
     description: Use the /gps command
     default: true

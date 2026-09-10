@@ -24,6 +24,8 @@ public class TransitGraph {
     private final double maxWalkingDistance;
     private final String walkingTransferPolicy;
     private final boolean hasFixedCostLines;
+    private final Map<String, Double> walkingDistances;
+    private int walkingEdgesFromPaths;
 
     public TransitGraph(
             Collection<Stop> stops,
@@ -32,8 +34,25 @@ public class TransitGraph {
             double maxWalkingDistance,
             String walkingTransferPolicy
     ) {
+        this(stops, lines, transferPenalty, maxWalkingDistance, walkingTransferPolicy, Map.of());
+    }
+
+    /**
+     * @param walkingDistances real walking distances between stop pairs, keyed by
+     *                         {@link #pairKey(String, String)}; used in place of straight-line
+     *                         distance for walking edges when present
+     */
+    public TransitGraph(
+            Collection<Stop> stops,
+            List<Line> lines,
+            double transferPenalty,
+            double maxWalkingDistance,
+            String walkingTransferPolicy,
+            Map<String, Double> walkingDistances
+    ) {
         this.maxWalkingDistance = maxWalkingDistance;
         this.walkingTransferPolicy = walkingTransferPolicy;
+        this.walkingDistances = walkingDistances;
         this.stopsById = new HashMap<>();
         this.staticAdjacency = new HashMap<>();
         this.transitEdges = new HashSet<>();
@@ -54,6 +73,17 @@ public class TransitGraph {
 
     public boolean hasFixedCostLines() {
         return hasFixedCostLines;
+    }
+
+    /** Number of walking edges whose weight came from a real path rather than a straight line. */
+    public int walkingEdgesFromPaths() {
+        return walkingEdgesFromPaths;
+    }
+
+    public static String pairKey(String a, String b) {
+        String x = a.toLowerCase(java.util.Locale.ROOT);
+        String y = b.toLowerCase(java.util.Locale.ROOT);
+        return x.compareTo(y) <= 0 ? x + "|" + y : y + "|" + x;
     }
 
     public Map<String, Stop> getStopsById() {
@@ -150,7 +180,11 @@ public class TransitGraph {
                 }
                 double dist = a.distance2D(b);
                 if (dist <= maxWalkingDistance) {
-                    addBidirectionalEdge(staticAdjacency, a.regionId(), b.regionId(), dist);
+                    Double walked = walkingDistances.get(pairKey(a.regionId(), b.regionId()));
+                    if (walked != null) {
+                        walkingEdgesFromPaths++;
+                    }
+                    addBidirectionalEdge(staticAdjacency, a.regionId(), b.regionId(), walked != null ? walked : dist);
                 }
             }
         }

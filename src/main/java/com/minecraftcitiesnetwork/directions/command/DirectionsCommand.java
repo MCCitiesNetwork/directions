@@ -1,9 +1,5 @@
 package com.minecraftcitiesnetwork.directions.command;
 
-import com.sk89q.worldedit.bukkit.BukkitAdapter;
-import com.sk89q.worldguard.WorldGuard;
-import com.sk89q.worldguard.protection.managers.RegionManager;
-import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import com.minecraftcitiesnetwork.directions.DirectionsPlugin;
 import com.minecraftcitiesnetwork.directions.config.ConfigLoader;
 import com.minecraftcitiesnetwork.directions.graph.TransitGraph;
@@ -11,19 +7,33 @@ import com.minecraftcitiesnetwork.directions.i18n.LangService;
 import com.minecraftcitiesnetwork.directions.model.RouteResult;
 import com.minecraftcitiesnetwork.directions.model.Stop;
 import com.minecraftcitiesnetwork.directions.navigation.Waypoint;
+import com.minecraftcitiesnetwork.directions.pathfinding.PathfindingSettings;
+import com.minecraftcitiesnetwork.directions.pathfinding.Pos;
+import com.minecraftcitiesnetwork.directions.pathfinding.WalkPath;
+import com.minecraftcitiesnetwork.directions.pathfinding.WalkResult;
+import com.minecraftcitiesnetwork.directions.pathfinding.bukkit.WalkPathService;
+import com.minecraftcitiesnetwork.directions.pathfinding.bukkit.WalkingDistanceCache;
 import com.minecraftcitiesnetwork.directions.resolver.DestinationResolver;
 import com.minecraftcitiesnetwork.directions.resolver.PlayerPositionResolver;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldguard.WorldGuard;
+import com.sk89q.worldguard.protection.managers.RegionManager;
+import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 public class DirectionsCommand {
@@ -35,6 +45,8 @@ public class DirectionsCommand {
     private final RegionSuggestionService suggestionService = new RegionSuggestionService();
     private final DestinationResolver destinationResolver = new DestinationResolver();
     private final PlayerPositionResolver playerPositionResolver = new PlayerPositionResolver();
+    /** Latest request per player, so a slow search cannot finish a route the player has since replaced. */
+    private final Map<UUID, Integer> requestIds = new HashMap<>();
 
     public DirectionsCommand(DirectionsPlugin plugin) {
         this.plugin = plugin;
@@ -55,6 +67,7 @@ public class DirectionsCommand {
     }
 
     public void stop(Player player) {
+        requestIds.merge(player.getUniqueId(), 1, Integer::sum);
         if (plugin.getNavigationService().stopNavigation(player)) {
             lang.send(player, "command.stopped", lang.placeholderRaw("prefix", lang.raw("prefix")));
         }
@@ -90,10 +103,9 @@ public class DirectionsCommand {
         }
 
         DestinationResolver.Destination destination = destinationResolver.resolve(target);
-        double destX = destination.x();
-        double destZ = destination.z();
         Waypoint finalWaypoint = new Waypoint.Region(destination.requestedRegionId());
-        routeAndNavigate(player, regionManager, destX, destZ, finalWaypoint);
+        Pos destPos = Pos.floor(destination.x(), destination.y(), destination.z());
+        routeAndNavigate(player, regionManager, destination.x(), destination.z(), destPos, finalWaypoint);
     }
 
     public void startAt(Player player, double x, double z) {
@@ -128,7 +140,9 @@ public class DirectionsCommand {
             return;
         }
 
-        routeAndNavigate(player, regionManager, x, z, destination);
+        // Without a Y the search resolves the column's surface itself.
+        Pos destPos = Pos.floor(x, includeY ? y : player.getWorld().getMaxHeight() - 1, z);
+        routeAndNavigate(player, regionManager, x, z, destPos, destination);
     }
 
     private void routeAndNavigate(
@@ -136,9 +150,11 @@ public class DirectionsCommand {
             RegionManager regionManager,
             double destX,
             double destZ,
+            Pos destPos,
             Waypoint finalWaypoint
     ) {
         TransitGraph graph = plugin.getTransitGraph();
+        World world = player.getWorld();
 
         PlayerPositionResolver.StartResolution startResolution =
                 playerPositionResolver.resolve(player, regionManager, graph);
@@ -147,10 +163,10 @@ public class DirectionsCommand {
             return;
         }
 
-        List<TransitGraph.StopDistance> nearDestination = graph.stopsWithinDistance(destX, destZ, player.getWorld().getName());
+        List<TransitGraph.StopDistance> nearDestination = graph.stopsWithinDistance(destX, destZ, world.getName());
         boolean destinationFallback = nearDestination.isEmpty();
         if (destinationFallback) {
-            nearDestination = graph.nearestStops(destX, destZ, player.getWorld().getName(), 1);
+            nearDestination = graph.nearestStops(destX, destZ, world.getName(), 1);
         }
         if (nearDestination.isEmpty()) {
             startGpsFallback(player, finalWaypoint);
@@ -162,6 +178,101 @@ public class DirectionsCommand {
             destinationEdges.put(sd.stopId(), sd.distance());
         }
 
+        WalkPathService service = plugin.getWalkPathService();
+        int requestId = requestIds.merge(player.getUniqueId(), 1, Integer::sum);
+        if (service == null || !service.settings().routingEnabledIn(world.getName())) {
+            finishRoute(player, graph, startResolution, destinationEdges, destinationFallback, destX, destZ, finalWaypoint, Map.of(), Map.of());
+            return;
+        }
+
+        // Stage two: real walking distances for every candidate leg, all under one budget.
+        PathfindingSettings.Routing routing = service.settings().routing();
+        Location loc = player.getLocation();
+        Pos playerPos = Pos.floor(loc.getX(), loc.getY(), loc.getZ());
+        Map<String, CompletableFuture<WalkResult>> startLegs = new HashMap<>();
+        Map<String, CompletableFuture<WalkResult>> destLegs = new HashMap<>();
+        for (Map.Entry<String, Double> e : startResolution.startEdges().entrySet()) {
+            if (e.getValue() <= 0.0 || e.getValue() > routing.maxLegDistance()) {
+                continue;
+            }
+            Pos stopPos = stopPos(world, e.getKey());
+            if (stopPos != null) {
+                startLegs.put(e.getKey(), service.find(world, playerPos, stopPos, routing.maxLegDistance() * 1.5, routing.timeBudget()));
+            }
+        }
+        for (Map.Entry<String, Double> e : destinationEdges.entrySet()) {
+            if (e.getValue() > routing.maxLegDistance()) {
+                continue;
+            }
+            Pos stopPos = stopPos(world, e.getKey());
+            if (stopPos != null) {
+                destLegs.put(e.getKey(), service.find(world, stopPos, destPos, routing.maxLegDistance() * 1.5, routing.timeBudget()));
+            }
+        }
+        if (startLegs.isEmpty() && destLegs.isEmpty()) {
+            finishRoute(player, graph, startResolution, destinationEdges, destinationFallback, destX, destZ, finalWaypoint, Map.of(), Map.of());
+            return;
+        }
+
+        List<CompletableFuture<WalkResult>> all = new ArrayList<>(startLegs.values());
+        all.addAll(destLegs.values());
+        CompletableFuture.allOf(all.toArray(new CompletableFuture[0])).whenComplete((v, error) -> service.mainThread().run(() -> {
+            if (!player.isOnline() || requestIds.getOrDefault(player.getUniqueId(), -1) != requestId) {
+                return;
+            }
+            Map<String, Double> startEdges = new HashMap<>(startResolution.startEdges());
+            Map<String, WalkResult> startResults = new HashMap<>();
+            startLegs.forEach((id, f) -> {
+                WalkResult r = f.getNow(null);
+                if (r != null && r.found()) {
+                    startEdges.put(id, r.path().totalDistance());
+                    startResults.put(id, r);
+                }
+            });
+            Map<String, Double> destEdges = new HashMap<>(destinationEdges);
+            Map<String, WalkResult> destResults = new HashMap<>();
+            destLegs.forEach((id, f) -> {
+                WalkResult r = f.getNow(null);
+                if (r != null && r.found()) {
+                    destEdges.put(id, r.path().totalDistance());
+                    destResults.put(id, r);
+                }
+            });
+            PlayerPositionResolver.StartResolution refined =
+                    new PlayerPositionResolver.StartResolution(startEdges, startResolution.fallbackUsed(), startResolution.currentStopId());
+            finishRoute(player, graph, refined, destEdges, destinationFallback, destX, destZ, finalWaypoint, startResults, destResults);
+        }));
+    }
+
+    /** Standing cell of a stop: the precomputed one, or its centre for the search to resolve. */
+    private Pos stopPos(World world, String stopId) {
+        WalkingDistanceCache cache = plugin.getWalkingDistanceCache();
+        if (cache != null) {
+            var known = cache.position(stopId);
+            if (known.isPresent()) {
+                return known.get();
+            }
+        }
+        Stop stop = plugin.getTransitGraph().getStopsById().get(stopId);
+        if (stop == null) {
+            return null;
+        }
+        int y = stop.hasY() ? (int) Math.floor(stop.y()) : world.getMaxHeight() - 1;
+        return new Pos((int) Math.floor(stop.x()), y, (int) Math.floor(stop.z()));
+    }
+
+    private void finishRoute(
+            Player player,
+            TransitGraph graph,
+            PlayerPositionResolver.StartResolution startResolution,
+            Map<String, Double> destinationEdges,
+            boolean destinationFallback,
+            double destX,
+            double destZ,
+            Waypoint finalWaypoint,
+            Map<String, WalkResult> startResults,
+            Map<String, WalkResult> destResults
+    ) {
         Location playerLoc = player.getLocation();
         RouteResult route = graph.hasFixedCostLines()
                 ? graph.route(START_NODE, DEST_NODE, startResolution.startEdges(), destinationEdges)
@@ -180,9 +291,16 @@ public class DirectionsCommand {
             return;
         }
 
-        plugin.getNavigationService().startNavigation(player, navWaypoints);
+        WalkPath firstLeg = null;
+        if (route.pathNodes().size() > 1) {
+            WalkResult r = startResults.get(route.pathNodes().get(1));
+            if (r != null && r.found()) {
+                firstLeg = r.path();
+            }
+        }
+        plugin.getNavigationService().startNavigation(player, navWaypoints, firstLeg);
         sendStartedNavigation(player, finalWaypoint);
-        sendRoute(player, route.pathNodes(), graph, startResolution.fallbackUsed(), destinationFallback, finalWaypoint);
+        sendRoute(player, route.pathNodes(), graph, startResolution.fallbackUsed(), destinationFallback, finalWaypoint, startResults);
         sendSwitchToDirectHint(player, finalWaypoint);
     }
 
@@ -200,7 +318,8 @@ public class DirectionsCommand {
                            TransitGraph graph,
                            boolean startFallback,
                            boolean destinationFallback,
-                           Waypoint finalWaypoint) {
+                           Waypoint finalWaypoint,
+                           Map<String, WalkResult> startResults) {
         ConfigLoader.LoadedData loadedData = plugin.getLoadedData();
         List<Step> steps = new ArrayList<>();
 
@@ -211,7 +330,7 @@ public class DirectionsCommand {
             if (from.equals(START_NODE)) {
                 steps.add(new Step("directions.walk-to-stop",
                         lang.stopName("to", loadedData, to),
-                        lang.placeholder("hint", directionHint(player.getLocation(), graph.getStopsById().get(to)))));
+                        lang.placeholderRaw("hint", walkHint(player.getLocation(), graph.getStopsById().get(to), startResults.get(to)))));
                 continue;
             }
             if (to.equals(DEST_NODE)) {
@@ -258,6 +377,25 @@ public class DirectionsCommand {
         }
     }
 
+    /** "about 140 blocks on foot, heading NE" when a path is known; straight-line distance otherwise. */
+    private String walkHint(Location from, Stop to, WalkResult leg) {
+        if (to == null) {
+            return "?";
+        }
+        double dx = to.x() - from.getX();
+        double dz = to.z() - from.getZ();
+        String direction = cardinalFromDelta(dx, dz);
+        if (leg != null && leg.found()) {
+            return lang.raw("directions.walk-hint-path")
+                    .replace("<distance>", String.valueOf(Math.round(leg.path().totalDistance())))
+                    .replace("<direction>", direction);
+        }
+        long blocks = Math.round(Math.sqrt(dx * dx + dz * dz));
+        return lang.raw("directions.walk-hint-line")
+                .replace("<distance>", String.valueOf(blocks))
+                .replace("<direction>", direction);
+    }
+
     private void sendSwitchToDirectHint(Player player, Waypoint destination) {
         String command = directNavigationCommand(destination);
         lang.send(player, "directions.switch-to-direct",
@@ -281,16 +419,6 @@ public class DirectionsCommand {
             return String.valueOf((long) value);
         }
         return String.format("%.1f", value);
-    }
-
-    private static String directionHint(Location from, Stop to) {
-        if (to == null) {
-            return "?";
-        }
-        double dx = to.x() - from.getX();
-        double dz = to.z() - from.getZ();
-        double blocks = Math.sqrt(dx * dx + dz * dz);
-        return Math.round(blocks) + " blocks " + cardinalFromDelta(dx, dz);
     }
 
     private static String cardinalFromDelta(double dx, double dz) {
@@ -363,5 +491,4 @@ public class DirectionsCommand {
         }
         return waypoints;
     }
-
 }

@@ -339,6 +339,19 @@ class WalkPathfinderScenarioTest {
     }
 
     @Test
+    void fencesCannotBeSteppedOnto() {
+        AsciiGrid f = AsciiGrid.parse("""
+                y=64
+                #########
+                #S..|..T#
+                #...|...#
+                #########
+                """);
+        WalkResult result = run(f);
+        assertFalse(result.found(), "a fence line is not climbable: " + result);
+    }
+
+    @Test
     void unloadedTerrainIsImpassable() {
         AsciiGrid f = AsciiGrid.parse("""
                 y=64
