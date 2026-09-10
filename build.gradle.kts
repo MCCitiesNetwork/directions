@@ -1,3 +1,4 @@
+import java.nio.file.Files
 import java.time.Duration
 
 plugins {
@@ -39,6 +40,9 @@ dependencies {
     implementation("de.bsommerfeld.pathetic:engine:5.5.2")
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    // L4: Bukkit wiring tests (scheduler, main-thread hop, snapshot pump) against a mocked server.
+    testImplementation("io.papermc.paper:paper-api:1.21.8-R0.1-SNAPSHOT")
+    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.90.0")
 }
 
 tasks {
@@ -100,10 +104,12 @@ tasks {
             run.resolve("eula.txt").writeText("eula=true\n")
             val world = sampleData.resolve("world/Reveille")
             if (world.isDirectory) {
+                // Symlink rather than copy: the world is ~2 GB. The server writes its session lock
+                // and autosaves into the sample folder; the self-test never changes blocks.
                 val target = run.resolve("Reveille")
                 if (!target.exists()) {
-                    logger.lifecycle("Copying sample world into run/ (one-time, ~2 GB)")
-                    copy { from(world); into(target) }
+                    logger.lifecycle("Linking sample world into run/")
+                    Files.createSymbolicLink(target.toPath(), world.absoluteFile.toPath())
                 }
                 copy { from(sampleData.resolve("worldguard/regions.yml")); into(run.resolve("plugins/WorldGuard/worlds/Reveille")) }
                 copy { from(sampleData.resolve("config")); into(run.resolve("plugins/Directions")) }

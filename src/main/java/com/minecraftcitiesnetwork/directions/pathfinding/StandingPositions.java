@@ -17,8 +17,9 @@ public final class StandingPositions {
     }
 
     /**
-     * Nearest standable cell to {@code (x, y, z)} within the profile's snap radius, preferring the
-     * same column and small vertical adjustments over horizontal ones.
+     * Nearest standable cell to {@code (x, y, z)} within the profile's snap radius. Dropping down and
+     * a single step up are cheap; climbing two or more blocks is expensive, so a point on the wall
+     * between two platforms snaps onto a platform rather than onto the roof above.
      */
     public static Optional<Pos> snap(BlockGrid grid, WalkerProfile profile, Pos at) {
         int radius = Math.min(profile.snapRadius(), MAX_RADIUS);
@@ -52,9 +53,20 @@ public final class StandingPositions {
     }
 
     /**
-     * Offsets grouped by Chebyshev radius, each group ordered by Euclidean distance with vertical
-     * offsets weighted lighter so the snapper prefers "same spot, slightly up or down" over sideways.
+     * Offsets grouped by Chebyshev radius, each group ordered by a weighted distance: downward moves
+     * cost a quarter, one step up costs the same as one step sideways, and higher climbs cost four
+     * times their square. Ties prefer the smaller horizontal displacement.
      */
+    private static double verticalCost(int dy) {
+        if (dy < 0) {
+            return 0.25 * dy * dy;
+        }
+        if (dy == 1) {
+            return 1.0;
+        }
+        return 4.0 * dy * dy;
+    }
+
     private static int[][][] buildOffsets() {
         int[][][] byRadius = new int[MAX_RADIUS + 1][][];
         for (int r = 0; r <= MAX_RADIUS; r++) {
@@ -68,7 +80,8 @@ public final class StandingPositions {
                     }
                 }
             }
-            ring.sort(Comparator.comparingDouble(o -> o[0] * o[0] + 0.25 * o[1] * o[1] + o[2] * o[2]));
+            ring.sort(Comparator.<int[]>comparingDouble(o -> o[0] * o[0] + o[2] * o[2] + verticalCost(o[1]))
+                    .thenComparingInt(o -> o[0] * o[0] + o[2] * o[2]));
             byRadius[r] = ring.toArray(new int[0][]);
         }
         return byRadius;

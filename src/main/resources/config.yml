@@ -54,7 +54,7 @@ pathfinding:
     snap-radius: 6
   engine:
     threads: 2
-    max-iterations: 200000
+    max-iterations: 400000
   chunks:
     # Chunk snapshots are taken on the main thread, at most this many per tick.
     snapshots-per-tick: 8

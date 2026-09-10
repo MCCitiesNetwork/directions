@@ -42,7 +42,7 @@ public record PathfindingSettings(
             new Routing(true, 300, Duration.ofMillis(250), true),
             new Guidance(true, 6, 8, Duration.ofMillis(2000), 600, Duration.ofMillis(400)),
             WalkerProfile.DEFAULT,
-            new Engine(2, 200_000),
+            new Engine(2, 400_000),
             new Chunks(8, true, 64, 2048, Duration.ofSeconds(90), Duration.ofSeconds(60)),
             new Debug(false, false)
     );

@@ -52,6 +52,33 @@ class StandingPositionsTest {
     }
 
     @Test
+    void prefersPlatformBesideOverRoofAbove() {
+        // A metro-like station: two platforms at y=74 separated by a one-wide wall, roof at y=76.
+        AsciiGrid f = AsciiGrid.parse("""
+                y=74
+                #########
+                #...#...#
+                #########
+                y=75
+                #########
+                #...#...#
+                #########
+                y=76
+                #########
+                #########
+                #########
+                y=77
+                .........
+                .........
+                .........
+                """);
+        // The region centre falls on the dividing wall at y=75.
+        Pos snapped = StandingPositions.snap(f.grid(), P, new Pos(4, 75, 1)).orElseThrow();
+        assertEquals(74, snapped.y(), "should snap onto a platform, not the roof: " + snapped);
+        assertTrue(snapped.x() == 3 || snapped.x() == 5);
+    }
+
+    @Test
     void surfaceFindsTopOfColumn() {
         ArrayBlockGrid grid = new ArrayBlockGrid(0, 60, 0, 3, 40, 3);
         for (int y = 60; y < 72; y++) {

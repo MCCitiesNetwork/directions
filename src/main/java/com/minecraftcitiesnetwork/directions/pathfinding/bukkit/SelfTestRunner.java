@@ -7,6 +7,8 @@ import org.bukkit.World;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import com.minecraftcitiesnetwork.directions.pathfinding.bukkit.WorldCapture.Result;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -32,6 +34,9 @@ public final class SelfTestRunner {
     }
 
     private record Outcome(Scenario scenario, WalkResult result, boolean ok, String note) {
+    }
+
+    private record CaptureSpec(String name, String world, Pos centre, int radius) {
     }
 
     private final JavaPlugin plugin;
@@ -78,14 +83,60 @@ public final class SelfTestRunner {
                     m.get("forbid") instanceof List<?> l ? l.stream().map(SelfTestRunner::pos).toList() : List.of()
             ));
         }
+        int repeat = Math.max(1, yaml.getInt("repeat", 1));
+        if (repeat > 1) {
+            List<Scenario> once = new ArrayList<>(scenarios);
+            for (int r = 2; r <= repeat; r++) {
+                for (Scenario s : once) {
+                    scenarios.add(new Scenario(s.name + "#" + r, s.world, s.from, s.to, s.expect, s.maxDistance, s.maxLength, s.forbid));
+                }
+            }
+        }
+        for (Map<?, ?> m : yaml.getMapList("captures")) {
+            captures.add(new CaptureSpec(
+                    String.valueOf(m.get("name")),
+                    m.get("world") == null ? CourseBuilder.WORLD_NAME : String.valueOf(m.get("world")),
+                    pos(m.get("center")),
+                    m.get("radius") instanceof Number n ? n.intValue() : 64));
+        }
         List<Outcome> outcomes = new ArrayList<>();
         // Give the pump and chunk system a moment after world creation, then run sequentially.
         Bukkit.getScheduler().runTaskLater(plugin, () -> runNext(scenarios, 0, outcomes), 40L);
     }
 
+    private final List<CaptureSpec> captures = new ArrayList<>();
+    private final List<String> captureNotes = new ArrayList<>();
+
+    private void runCaptures(int index, Runnable then) {
+        if (index >= captures.size()) {
+            then.run();
+            return;
+        }
+        CaptureSpec c = captures.get(index);
+        World world = Bukkit.getWorld(c.world);
+        if (world == null) {
+            captureNotes.add(c.name + ": world not found");
+            runCaptures(index + 1, then);
+            return;
+        }
+        Path file = plugin.getDataFolder().toPath().resolve("captures").resolve(c.name + ".grid.gz");
+        new WorldCapture(service).capture(world, c.centre, c.radius, file).whenComplete((Result r, Throwable error) -> {
+            if (error != null || r == null) {
+                captureNotes.add(c.name + ": failed: " + error);
+                plugin.getLogger().warning("SELFTEST capture " + c.name + " failed: " + error);
+            } else {
+                String note = c.name + ": " + r.file() + " origin=(" + r.originX() + "," + r.originZ() + ") y=" + r.minY() + ".." + r.maxY()
+                        + " size=" + r.sizeX() + "x" + r.sizeZ() + " bytes=" + r.bytes();
+                captureNotes.add(note);
+                plugin.getLogger().info("SELFTEST capture " + note);
+            }
+            runCaptures(index + 1, then);
+        });
+    }
+
     private void runNext(List<Scenario> scenarios, int index, List<Outcome> outcomes) {
         if (index >= scenarios.size()) {
-            finish(outcomes);
+            runCaptures(0, () -> finish(outcomes));
             return;
         }
         Scenario s = scenarios.get(index);

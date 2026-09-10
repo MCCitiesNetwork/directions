@@ -10,6 +10,37 @@ End-to-end plan for integrating the Pathetic A\* engine into Directions, with th
 | World adapter | **In-house.** pathetic-bukkit is used only as a reference during the spike. |
 | Total effort | 6 phases, roughly 19–27 working days |
 
+## Status (2026-09-10, branch `feature/pathetic`)
+
+Phases 0 to 4 are implemented and verified; Phase 5 is documentation and rollout. Measured on this
+machine, Paper 1.21.8, Java 21:
+
+| Check | Result |
+|---|---|
+| Unit suite: L0, L2 with 200 seeds, region-file reader, config, L4 MockBukkit wiring, L1 captured terrain | 85 tests, all pass, about 2 s |
+| Optimality against an independent Dijkstra on 8-neighbour mazes | exact match on every seed |
+| L3 perf gate, 150-block routes on a synthetic 400x400 city | p50 3.9 ms, p95 6.4 ms, 60 of 60 found; 16 concurrent searches identical to sequential |
+| L5 synthetic course on a real headless Paper 1.21.8 server | 12 of 12 scenarios pass; worst pump tick 0.12 ms |
+| Reveille, 8 real stop-to-stop routes of 213 to 383 blocks, cold cache | 8 of 8 found in 17 to 757 ms; 4,668 chunks read from region files, 49 snapshots, 0 chunk loads, worst pump tick 0.27 ms |
+| Same 8 routes, warm cache | 2 to 42 ms |
+| Relocated plugin jar | 1.76 MB (was 0.92 MB) |
+
+Findings from the real world worth keeping: cold cost is dominated by decoding region files, not by
+the search (a 383-block route took 757 ms cold and 18 ms warm); a metro stop whose region centre sat
+on the wall between two platforms first snapped onto the station roof, which is reachable only by
+falling off it, so the snapper now prefers sideways and downward adjustments over climbing.
+
+Deviations from the plan as written: the validator, corner-cut and drop rules live in one
+`WalkMoveValidator` and the cost rules in one `TransitionCost`; the region-file reader is pure Java
+and sits in the core `grid` package with a generated-fixture test instead of committed `.mca` files;
+the cost model has no surface or region preference (owner decision); the sample world is symlinked
+into `run/`, not copied, because the machine has about 2 GB of free disk; the synthetic fixture world
+is built programmatically by `CourseBuilder` at self-test time instead of being committed; the L4
+service round-trip test skips under MockBukkit 4.90.0 because its chunk snapshots do not implement
+the height lookup the decoder uses, and the same path is covered by L5 on a real server; no GitHub
+Actions workflows were added (owner preference), the Gradle tasks `test`, `perfTest`, `fuzzLong` and
+`serverSmoke` are ready to wire into any CI.
+
 ## 0. Decisions made up front
 
 These are settled so the rest of the plan can be concrete. Each has a one-line reason; the study has the long form.
@@ -32,27 +63,32 @@ com.minecraftcitiesnetwork.directions
 │   ├── WalkerProfile               height, stepUp, maxDrop, canSwim, transition multipliers
 │   ├── WalkPath                    immutable node list + cumulative distance + helpers
 │   ├── WalkRequest / WalkResult    request (world id, from, to, limits) / result (path | reason)
-│   ├── WalkPathfinder              THE ONLY class that imports Pathetic
-│   ├── engine/
+│   ├── WalkPathfinder              endpoints, limits, budgets, result mapping (no Pathetic imports)
+│   ├── engine/                     (the only package that imports Pathetic)
+│   │   ├── EngineBridge            configures the engine: synchronous, octile-only heuristic, fallback on
 │   │   ├── GridNavigationProvider  NavigationPointProvider over BlockGrid
-│   │   ├── GridEnvironment         EnvironmentContext carrying the BlockGrid + profile
-│   │   ├── WalkerNeighbors         10-vector INeighborStrategy
-│   │   ├── WalkableValidator       ground below, headroom, single step-up (ported, MIT)
-│   │   ├── CornerCutValidator      no squeezing through diagonal walls (ported, MIT)
-│   │   ├── DropValidator           max fall height
-│   │   └── TransitionCost          multipliers for OPENABLE, LIQUID, CLIMBABLE moves
+│   │   ├── GridEnvironment         EnvironmentContext carrying the BlockGrid, profile and deadline
+│   │   ├── SearchClock             thread-local deadline so the neighbour strategy can starve an expired search
+│   │   ├── WalkerNeighbors         26 unit moves; returns none once the budget has expired
+│   │   ├── WalkMoveValidator       body fit, support, one-block step-up, falling, corner cutting
+│   │   └── TransitionCost          multipliers for OPENABLE, LIQUID, CLIMBABLE moves, step-up penalty
 │   ├── MainThread                  interface: run(Runnable); test impl is synchronous
 │   ├── SearchBudget                wall-clock budget + abort wiring
 │   └── grid/
 │       ├── ArrayBlockGrid          dense in-memory grid (fixtures, captures)
 │       ├── GridCodec               .grid.gz read/write (bounding box + flags only, no materials)
-│       └── AsciiGrid               tiny multi-layer ASCII DSL for unit tests
+│       ├── AsciiGrid               tiny multi-layer ASCII DSL for unit tests
+│       ├── ChunkFlags              one chunk's flags over a Y band around the surface
+│       ├── BandDecoder             full-height column source → ChunkFlags band
+│       └── RegionFileReader        read-only Anvil reader (pure Java) → ChunkFlags
 ├── pathfinding.bukkit              (Bukkit shell)
-│   ├── ChunkFlagCache              per-world cache of decoded BlockFlags per chunk (not snapshots), block-event invalidation
+│   ├── ChunkFlagCache              per-world cache of ChunkFlags; snapshot tier, disk tier, UNLOADED tier; block-event patching
 │   ├── SnapshotPump                main-thread task: snapshots ≤ N loaded chunks per tick from a queue
-│   ├── RegionFileReader            off-thread, read-only Anvil reader for generated-but-unloaded chunks
-│   ├── ChunkFlagDecoder            ChunkSnapshot or NBT section → BlockFlags, runs on the search executor
+│   ├── SnapshotDecoder / MaterialFlags  ChunkSnapshot → ChunkFlags on the search thread, Material memoised by ordinal
 │   ├── CachedBlockGrid             BlockGrid over the cache; bounded waits on misses; UNLOADED for ungenerated
+│   ├── BlockChangeListener         patches single blocks, drops chunks on multi-block events
+│   ├── StopLocator                 stop centre → standing cell (region height or surface)
+│   ├── SelfTestRunner / CourseBuilder  headless verification and the synthetic course world
 │   ├── BukkitMainThread            MainThread via Bukkit scheduler
 │   ├── WalkPathService             façade the rest of the plugin uses; owns executor, metrics
 │   ├── WalkingDistanceCache        stop-pair walking distances computed at reload

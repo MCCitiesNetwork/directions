@@ -31,6 +31,7 @@ replay_pid*
 # configs, and terrain captures. Never committed. See docs/pathetic-integration-plan.md.
 sample-data/
 run/
+run-smoke/
 *.grid.gz
 *.mca
 *.mcr

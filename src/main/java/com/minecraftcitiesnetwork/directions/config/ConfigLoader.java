@@ -409,7 +409,7 @@ public class ConfigLoader {
         @Setting("threads")
         public int threads = 2;
         @Setting("max-iterations")
-        public int maxIterations = 200_000;
+        public int maxIterations = 400_000;
     }
 
     @ConfigSerializable
