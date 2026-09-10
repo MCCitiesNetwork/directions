@@ -27,3 +27,16 @@ replay_pid*
 
 # workspace files
 .code-workspace
+# Local-only development data: the real city world, WorldGuard regions, live
+# configs, and terrain captures. Never committed. See docs/pathetic-integration-plan.md.
+sample-data/
+run/
+*.grid.gz
+*.mca
+*.mcr
+level.dat
+level.dat_old
+session.lock
+
+# IDE build output (VS Code Java / Eclipse)
+bin/
