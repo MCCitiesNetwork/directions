@@ -1,5 +1,6 @@
 package com.minecraftcitiesnetwork.directions.walk.bukkit;
 
+import com.minecraftcitiesnetwork.directions.walk.ColumnChunk;
 import com.minecraftcitiesnetwork.directions.walk.ColumnDecoder;
 import com.minecraftcitiesnetwork.directions.walk.ColumnStore;
 import com.minecraftcitiesnetwork.directions.walk.WalkSettings;
@@ -92,8 +93,11 @@ public final class ChunkColumnCache {
                 if (!world.isChunkLoaded(cx, cz)) {
                     continue;
                 }
-                stats.cacheMiss();
-                waits.add(enqueue(new ChunkKey(id, cx, cz)));
+                ChunkKey key = new ChunkKey(id, cx, cz);
+                if (!pending.containsKey(key)) {
+                    stats.cacheMiss();
+                }
+                waits.add(enqueue(key));
             }
         }
         if (waits.isEmpty()) {
@@ -128,6 +132,9 @@ public final class ChunkColumnCache {
         long now = System.currentTimeMillis();
         for (Iterator<ChunkKey> it = dirty.iterator(); it.hasNext(); ) {
             ChunkKey key = it.next();
+            if (pending.containsKey(key)) {
+                continue;
+            }
             Long at = capturedAt.get(key);
             if (at != null && now - at < RECAPTURE_INTERVAL_MILLIS) {
                 continue;
@@ -159,14 +166,28 @@ public final class ChunkColumnCache {
     }
 
     private void decode(ChunkKey key, ChunkSnapshot snapshot, int minY, int maxY) {
+        ColumnChunk decoded = null;
         try {
-            store.put(key.world(), ColumnDecoder.decode(key.x(), key.z(), new SnapshotBlocks(snapshot, kinds, minY, maxY)));
-            capturedAt.put(key, System.currentTimeMillis());
+            decoded = ColumnDecoder.decode(key.x(), key.z(), new SnapshotBlocks(snapshot, kinds, minY, maxY));
         } catch (RuntimeException e) {
             plugin.getLogger().log(Level.WARNING, "Failed to decode chunk " + key, e);
-        } finally {
-            finish(key);
         }
+        ColumnChunk result = decoded;
+        if (!plugin.isEnabled()) {
+            finish(key);
+            return;
+        }
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            try {
+                World world = Bukkit.getWorld(key.world());
+                if (result != null && world != null && world.isChunkLoaded(key.x(), key.z())) {
+                    store.put(key.world(), result);
+                    capturedAt.put(key, System.currentTimeMillis());
+                }
+            } finally {
+                finish(key);
+            }
+        });
     }
 
     private void finish(ChunkKey key) {
