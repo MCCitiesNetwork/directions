@@ -9,7 +9,6 @@ import com.minecraftcitiesnetwork.directions.navigation.Waypoint;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
-import java.util.List;
 
 public class CompassCommand {
     private final DirectionsPlugin plugin;
@@ -71,7 +70,7 @@ public class CompassCommand {
             return;
         }
 
-        plugin.getNavigationService().startGpsNavigation(player, List.of(destination));
+        plugin.getNavigationService().startGpsNavigation(player, destination);
         lang.send(player, "compass.started",
                 lang.placeholderRaw("prefix", lang.raw("prefix")),
                 lang.waypointLabel("destination", plugin.getLoadedData(), destination));

@@ -70,17 +70,18 @@ public class NavigationService implements Listener {
         sessions.clear();
     }
 
-    public void startNavigation(Player player, List<Waypoint> waypoints) {
-        startNavigation(player, waypoints, false);
+    public void startNavigation(Player player, List<Leg> legs) {
+        startNavigation(player, legs, false);
     }
 
-    public void startGpsNavigation(Player player, List<Waypoint> waypoints) {
-        startNavigation(player, waypoints, true);
+    /** Direct navigation (/gps, /compass, fallbacks): one walking leg to the destination. */
+    public void startGpsNavigation(Player player, Waypoint destination) {
+        startNavigation(player, List.of(Leg.walk(destination)), true);
     }
 
-    private void startNavigation(Player player, List<Waypoint> waypoints, boolean gps) {
+    private void startNavigation(Player player, List<Leg> legs, boolean gps) {
         stopNavigation(player);
-        if (waypoints.isEmpty()) {
+        if (legs.isEmpty()) {
             return;
         }
 
@@ -88,7 +89,7 @@ public class NavigationService implements Listener {
         bossBar.addPlayer(player);
 
         List<ArmorStand> arrowStands = new ArrayList<>();
-        Session session = new Session(plugin, player.getUniqueId(), waypoints, 0, arrowStands, bossBar, gps);
+        Session session = new Session(plugin, player.getUniqueId(), legs, 0, arrowStands, bossBar, gps);
         sessions.put(player.getUniqueId(), session);
         applyVisibility(session);
     }
