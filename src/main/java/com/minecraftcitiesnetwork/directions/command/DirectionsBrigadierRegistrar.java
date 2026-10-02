@@ -30,6 +30,10 @@ public final class DirectionsBrigadierRegistrar {
                     .then(Commands.literal("reload")
                             .requires(source -> source.getSender().hasPermission("directions.reload"))
                             .executes(this::reload))
+                    .then(Commands.literal("debug")
+                            .requires(source -> source.getSender().hasPermission("directions.debug"))
+                            .then(Commands.literal("walk")
+                                    .executes(this::debugWalk)))
                     .then(Commands.argument("region", StringArgumentType.word())
                             .requires(source -> source.getSender().hasPermission("directions.use"))
                             .suggests((context, builder) -> {
@@ -75,6 +79,11 @@ public final class DirectionsBrigadierRegistrar {
 
     private int reload(CommandContext<CommandSourceStack> context) {
         command.reload(context.getSource().getSender());
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int debugWalk(CommandContext<CommandSourceStack> context) {
+        command.debugWalk(context.getSource().getSender());
         return Command.SINGLE_SUCCESS;
     }
 }

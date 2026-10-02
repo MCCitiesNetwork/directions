@@ -15,6 +15,8 @@ import com.minecraftcitiesnetwork.directions.navigation.LegPlanner;
 import com.minecraftcitiesnetwork.directions.navigation.Waypoint;
 import com.minecraftcitiesnetwork.directions.resolver.DestinationResolver;
 import com.minecraftcitiesnetwork.directions.resolver.PlayerPositionResolver;
+import com.minecraftcitiesnetwork.directions.walk.bukkit.WalkSearchService;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
@@ -54,6 +56,17 @@ public class DirectionsCommand {
     public void reload(CommandSender sender) {
         plugin.reloadDirectionsData();
         lang.send(sender, "command.reloaded", lang.placeholderRaw("prefix", lang.raw("prefix")));
+    }
+
+    public void debugWalk(CommandSender sender) {
+        WalkSearchService service = plugin.getWalkService();
+        if (service == null) {
+            lang.send(sender, "walk.debug-disabled", lang.placeholderRaw("prefix", lang.raw("prefix")));
+            return;
+        }
+        for (String line : service.stats().describe(service.cachedChunks())) {
+            sender.sendMessage(Component.text(line));
+        }
     }
 
     public void stop(Player player) {
