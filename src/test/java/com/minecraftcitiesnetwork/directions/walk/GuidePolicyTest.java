@@ -211,4 +211,18 @@ class GuidePolicyTest {
         assertEquals(List.of(new Cell(100, 65, 0)), second.spentExits());
         assertEquals(1, second.spentExits().size());
     }
+
+    @Test
+    void uncapturedStartWaitsQuietlyThenSearchesAgain() {
+        GuidePolicy p = new GuidePolicy(TUNING);
+        SearchOrder first = p.tick(at(0, 0));
+        p.onResult(first.generation(), SearchResult.failed(SearchResult.Status.UNCAPTURED_START, 0, 1000), 0);
+        assertFalse(p.failed());
+        assertFalse(p.takeNoRouteMessage());
+        assertNull(p.route());
+        assertNull(p.tick(at(500, 0)));
+        SearchOrder again = p.tick(at(1000, 0));
+        assertNotNull(again);
+        assertEquals(Reason.INITIAL, again.reason());
+    }
 }

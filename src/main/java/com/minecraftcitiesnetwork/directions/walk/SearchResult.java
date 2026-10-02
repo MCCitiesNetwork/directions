@@ -15,7 +15,9 @@ public record SearchResult(Status status, Route route, double cost, int expansio
         /** The expansion cap or the time budget ran out. */
         BUDGET,
         /** No surface near the player to start from. */
-        INVALID_START
+        INVALID_START,
+        /** The player's own column is not captured yet; try again shortly. */
+        UNCAPTURED_START
     }
 
     public boolean found() {

@@ -34,6 +34,9 @@ public final class BlockKinds {
         if (CLIMBABLE.contains(n)) {
             return BlockKind.CLIMB;
         }
+        if (n.equals("IRON_DOOR") || n.equals("IRON_TRAPDOOR")) {
+            return BlockKind.SOLID;
+        }
         if (n.endsWith("_DOOR") || n.endsWith("_FENCE_GATE") || n.endsWith("_TRAPDOOR")) {
             return BlockKind.DOOR;
         }

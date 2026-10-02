@@ -34,6 +34,9 @@ public final class WindowSearch {
         long started = nanoClock.getAsLong();
         Start start = snap(terrain, request.x(), request.y(), request.z(), request.window());
         if (start == null) {
+            if (terrain.surfaces((int) Math.floor(request.x()), (int) Math.floor(request.z())) == null) {
+                return SearchResult.failed(SearchResult.Status.UNCAPTURED_START, 0, nanoClock.getAsLong() - started);
+            }
             return SearchResult.failed(SearchResult.Status.INVALID_START, 0, nanoClock.getAsLong() - started);
         }
         if (!request.goal().mayOverlap(request.window())) {

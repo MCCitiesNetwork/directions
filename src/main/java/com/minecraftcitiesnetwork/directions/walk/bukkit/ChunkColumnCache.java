@@ -14,6 +14,7 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -33,6 +34,7 @@ import java.util.logging.Level;
  * loads a chunk. Changed chunks are re-captured at most once per second.
  */
 public final class ChunkColumnCache {
+    static final long STALE_AFTER_MILLIS = 5 * 60 * 1000;
     private static final long RECAPTURE_INTERVAL_MILLIS = 1000;
 
     record ChunkKey(UUID world, int x, int z) {
@@ -84,27 +86,52 @@ public final class ChunkColumnCache {
     CompletableFuture<Void> capture(World world, Window window) {
         UUID id = world.getUID();
         List<CompletableFuture<Void>> waits = new ArrayList<>();
-        for (int cx = window.minX() >> 4; cx <= window.maxX() >> 4; cx++) {
-            for (int cz = window.minZ() >> 4; cz <= window.maxZ() >> 4; cz++) {
-                if (store.contains(id, cx, cz)) {
+        long now = System.currentTimeMillis();
+        for (int[] c : nearestFirst(window)) {
+            int cx = c[0];
+            int cz = c[1];
+            ChunkKey key = new ChunkKey(id, cx, cz);
+            if (store.contains(id, cx, cz)) {
+                Long at = capturedAt.get(key);
+                boolean stale = at != null && now - at > STALE_AFTER_MILLIS && world.isChunkLoaded(cx, cz);
+                if (!stale) {
                     stats.cacheHit();
                     continue;
                 }
-                if (!world.isChunkLoaded(cx, cz)) {
-                    continue;
-                }
-                ChunkKey key = new ChunkKey(id, cx, cz);
-                if (!pending.containsKey(key)) {
-                    stats.cacheMiss();
-                }
-                waits.add(enqueue(key));
+            } else if (!world.isChunkLoaded(cx, cz)) {
+                continue;
             }
+            if (!pending.containsKey(key)) {
+                stats.cacheMiss();
+            }
+            waits.add(enqueue(key));
         }
         if (waits.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
         return CompletableFuture.allOf(waits.toArray(new CompletableFuture[0]))
                 .completeOnTimeout(null, settings.captureWaitMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    /** The window's chunks ordered by squared distance from its centre chunk, ties by x then z. */
+    static List<int[]> nearestFirst(Window window) {
+        int minCx = window.minX() >> 4;
+        int maxCx = window.maxX() >> 4;
+        int minCz = window.minZ() >> 4;
+        int maxCz = window.maxZ() >> 4;
+        int centreX = ((window.minX() + window.maxX()) / 2) >> 4;
+        int centreZ = ((window.minZ() + window.maxZ()) / 2) >> 4;
+        List<int[]> chunks = new ArrayList<>();
+        for (int cx = minCx; cx <= maxCx; cx++) {
+            for (int cz = minCz; cz <= maxCz; cz++) {
+                chunks.add(new int[] {cx, cz});
+            }
+        }
+        chunks.sort(Comparator
+                .comparingLong((int[] c) -> (long) (c[0] - centreX) * (c[0] - centreX) + (long) (c[1] - centreZ) * (c[1] - centreZ))
+                .thenComparingInt(c -> c[0])
+                .thenComparingInt(c -> c[1]));
+        return chunks;
     }
 
     /** Main thread. A block in this chunk changed. */

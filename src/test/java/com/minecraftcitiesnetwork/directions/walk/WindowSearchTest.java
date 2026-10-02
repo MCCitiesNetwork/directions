@@ -173,6 +173,12 @@ class WindowSearchTest {
     }
 
     @Test
+    void startOnAnUncapturedColumnIsReportedAsUncaptured() {
+        SearchResult r = SEARCH.search(flat(10, 10).terrain(), request(50.5, 65, 50.5, at(5, 65, 0), new Window(0, 0, 60, 60)));
+        assertEquals(SearchResult.Status.UNCAPTURED_START, r.status());
+    }
+
+    @Test
     void negativeCoordinatesWork() {
         BlockWorld world = new BlockWorld(64).fill(-30, 64, -30, -1, 64, -1, BlockKind.SOLID);
         SearchResult r = SEARCH.search(world.terrain(), request(-0.5, 65, -0.5, at(-20, 65, -1), new Window(-30, -30, -1, -1)));

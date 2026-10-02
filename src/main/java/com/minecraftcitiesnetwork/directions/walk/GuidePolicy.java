@@ -12,6 +12,7 @@ public final class GuidePolicy {
     public static final long RETRY_MILLIS = 10_000;
     public static final double RETRY_DISTANCE = 16;
     public static final long MIN_INTERVAL_MILLIS = 250;
+    public static final long TERRAIN_WAIT_MILLIS = 1000;
     public static final int MAX_SPENT_EXITS = 32;
 
     public record Tuning(double extendDistance, double offRouteDistance, long cooldownMillis) {
@@ -41,6 +42,7 @@ public final class GuidePolicy {
     private boolean inFlight;
     private Reason inFlightReason;
     private long lastSearchAt = Long.MIN_VALUE / 2;
+    private long waitUntil = Long.MIN_VALUE;
     private long failedAt;
     private double failedX;
     private double failedZ;
@@ -66,7 +68,7 @@ public final class GuidePolicy {
             }
         }
         Reason want = switch (state) {
-            case IDLE -> Reason.INITIAL;
+            case IDLE -> o.nowMillis() >= waitUntil ? Reason.INITIAL : null;
             case FAILED -> retryDue(o) ? Reason.RETRY : null;
             case FOLLOWING -> followingReason(o, offRoute);
         };
@@ -85,11 +87,11 @@ public final class GuidePolicy {
             return null;
         }
         if (want == Reason.EXTEND) {
-            if (spentExits.size() >= MAX_SPENT_EXITS) {
-                spentExits.remove(0);
-            }
             Cell end = route.end();
             if (!spentExits.contains(end)) {
+                if (spentExits.size() >= MAX_SPENT_EXITS) {
+                    spentExits.remove(0);
+                }
                 spentExits.add(end);
             }
         }
@@ -113,6 +115,12 @@ public final class GuidePolicy {
         if (route != null && (inFlightReason == Reason.EXTEND || inFlightReason == Reason.OFF_ROUTE)) {
             return;
         }
+        if (result.status() == SearchResult.Status.UNCAPTURED_START) {
+            route = null;
+            state = State.IDLE;
+            waitUntil = nowMillis + TERRAIN_WAIT_MILLIS;
+            return;
+        }
         route = null;
         state = State.FAILED;
         failedAt = nowMillis;
@@ -130,6 +138,7 @@ public final class GuidePolicy {
         route = null;
         cursor = 0;
         state = State.IDLE;
+        waitUntil = Long.MIN_VALUE;
         spentExits.clear();
     }
 
