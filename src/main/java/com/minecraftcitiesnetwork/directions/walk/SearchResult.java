@@ -1,0 +1,28 @@
+package com.minecraftcitiesnetwork.directions.walk;
+
+/**
+ * @param route the route for COMPLETE and PARTIAL, otherwise null
+ * @param cost  walking cost of the route
+ */
+public record SearchResult(Status status, Route route, double cost, int expansions, long nanos) {
+    public enum Status {
+        /** The route reaches the goal. */
+        COMPLETE,
+        /** The goal is outside the window; the route ends at the best exit. */
+        PARTIAL,
+        /** Nothing reachable inside the window leads on. */
+        NO_ROUTE,
+        /** The expansion cap or the time budget ran out. */
+        BUDGET,
+        /** No surface near the player to start from. */
+        INVALID_START
+    }
+
+    public boolean found() {
+        return status == Status.COMPLETE || status == Status.PARTIAL;
+    }
+
+    public static SearchResult failed(Status status, int expansions, long nanos) {
+        return new SearchResult(status, null, 0.0, expansions, nanos);
+    }
+}
