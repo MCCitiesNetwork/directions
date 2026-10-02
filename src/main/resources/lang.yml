@@ -52,3 +52,4 @@ navigation:
 
 walk:
   debug-disabled: "<prefix><yellow>Walking paths are disabled (walking-paths.enabled: false)."
+  no-route: "<prefix><yellow>No walking route found nearby, follow the arrow."

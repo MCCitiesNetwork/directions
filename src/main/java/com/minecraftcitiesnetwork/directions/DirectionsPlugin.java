@@ -57,6 +57,9 @@ public class DirectionsPlugin extends JavaPlugin {
                 loadedData.walkingTransferPolicy()
         );
         restartWalking();
+        if (navigationService != null) {
+            navigationService.dropGuides();
+        }
         getLogger().info("Loaded " + loadedData.stopsById().size() + " stops and " + loadedData.lines().size() + " lines.");
     }
 

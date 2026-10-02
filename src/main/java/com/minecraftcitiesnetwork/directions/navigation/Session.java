@@ -1,6 +1,7 @@
 package com.minecraftcitiesnetwork.directions.navigation;
 
 import com.minecraftcitiesnetwork.directions.DirectionsPlugin;
+import com.minecraftcitiesnetwork.directions.walk.bukkit.WalkGuide;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.ArmorStand;
 import org.jetbrains.annotations.Nullable;
@@ -18,6 +19,8 @@ final class Session implements SessionView {
     private final boolean gps;
     private double legStartDistance;
     private int upcomingHintSentForIndex;
+    private @Nullable WalkGuide guide;
+    private int guideLeg = -1;
 
     Session(DirectionsPlugin plugin, UUID playerId, List<Leg> legs, int index, List<ArmorStand> arrowStands, BossBar bossBar, boolean gps) {
         this.plugin = plugin;
@@ -94,6 +97,24 @@ final class Session implements SessionView {
     @Override
     public @Nullable Waypoint previousWaypoint() {
         return targetAt(index - 1);
+    }
+
+    @Nullable WalkGuide guide() {
+        return guide;
+    }
+
+    int guideLeg() {
+        return guideLeg;
+    }
+
+    void setGuide(WalkGuide guide, int leg) {
+        this.guide = guide;
+        this.guideLeg = leg;
+    }
+
+    void clearGuide() {
+        this.guide = null;
+        this.guideLeg = -1;
     }
 
     void advance() {

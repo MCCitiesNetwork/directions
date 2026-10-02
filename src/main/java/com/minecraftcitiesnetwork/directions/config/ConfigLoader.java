@@ -55,11 +55,11 @@ public class ConfigLoader {
             double coordinateArrivalRadius = root.coordinateArrivalRadius;
             String bossbarFormat = root.bossbarFormat;
             if (bossbarFormat == null || bossbarFormat.isBlank()) {
-                bossbarFormat = "Next: <stop>  <remaining>m";
+                bossbarFormat = "Next: <stop>  <approx><remaining>m";
             }
             String gpsBossbarFormat = root.gpsBossbarFormat;
             if (gpsBossbarFormat == null || gpsBossbarFormat.isBlank()) {
-                gpsBossbarFormat = "Destination: <stop>  <remaining>m";
+                gpsBossbarFormat = "Destination: <stop>  <approx><remaining>m";
             }
             if (transferPenalty < 0) {
                 throw new IllegalStateException("transfer-penalty must be >= 0");
@@ -280,9 +280,9 @@ public class ConfigLoader {
         @Setting("coordinate-arrival-radius")
         public double coordinateArrivalRadius = 5.0;
         @Setting("bossbar-format")
-        public String bossbarFormat = "Next: <stop>  <remaining>m";
+        public String bossbarFormat = "Next: <stop>  <approx><remaining>m";
         @Setting("gps-bossbar-format")
-        public String gpsBossbarFormat = "Destination: <stop>  <remaining>m";
+        public String gpsBossbarFormat = "Destination: <stop>  <approx><remaining>m";
         @Setting("walking-transfer-policy")
         public String walkingTransferPolicy = "shared-mode-only";
         @Setting("lines")
