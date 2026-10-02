@@ -103,7 +103,7 @@ com.minecraftcitiesnetwork.directions
 │   ├── Goal                     interface: contains(Cell), heuristic(Cell); RegionGoal, PointGoal
 │   ├── WindowSearch             A* inside a window; returns SearchResult
 │   ├── SearchResult             COMPLETE(route) | PARTIAL(route, exit) | NO_ROUTE | BUDGET | INVALID_START
-│   ├── Route                    immutable cells + cumulative distance; nearest, remaining, lookAhead, stitch
+│   ├── Route                    immutable cells + cumulative distance; nearest, remaining, lookAhead
 │   └── GuidePolicy              the WalkGuide's decisions as a pure state machine (clock and searches injected)
 ├── walk.bukkit
 │   ├── MaterialKinds            Material → BlockKind, memoised by ordinal
@@ -139,7 +139,7 @@ Each x,z column stores only the heights where a player can be, as `Surface` entr
 | Footing | Condition at feet height `y` |
 |---|---|
 | `GROUND` | block at `y−1` supports standing (full solid, top slab, stair, farmland, path, etc.); blocks `y` and `y+1` are passable |
-| `WATER` | block at `y` is water and block at `y+1` is passable or water (swimming); never counts as support for a move into the air above it |
+| `WATER` | block at `y` is water and block at `y+1` is passable: swimming at the top of a water column (underwater routes are not modelled) |
 | `CLIMB` | block at `y` is a ladder, vine or scaffolding and `y+1` is passable or climbable |
 
 `headroom` is the number of passable blocks above the feet, capped at 4; a step up needs headroom ≥ 3
@@ -186,8 +186,8 @@ From a surface at column (x, z) to the 8 neighbouring columns, and vertically wi
 - **Climb:** within a `CLIMB` column, up or down one block; off the top onto an adjacent `GROUND`
   surface.
 - **Swim:** `WATER` to adjacent `WATER` or `GROUND` within ±1.
-- **Diagonal:** allowed only if both orthogonal intermediate columns would also admit the move (no
-  corner-cutting past wall corners or fence posts).
+- **Diagonal:** level moves only, and only if both orthogonal side columns have a surface at the same
+  height (no corner-cutting past wall corners or fence posts).
 
 Cost = Euclidean move length × multiplier: water `2.5`, climbing `2.0`, entering a door `1.5`, step up
 `+0.5` flat. Every multiplier is ≥ 1, so straight-line distance stays an admissible heuristic.
@@ -197,8 +197,11 @@ Cost = Euclidean move length × multiplier: water `2.5`, climbing `2.0`, enterin
 `WindowSearch` is A\* over surfaces inside a square window centred on the start, `window-radius` blocks
 each way (default 80, giving 160 × 160), clipped to captured chunks.
 
-- **Goals.** `RegionGoal` accepts any cell inside the region's footprint, within its y-range when the
-  region is bounded; the heuristic is the 3D distance to the region's box. `PointGoal` (coordinates)
+- **Goals.** Each goal matches `ArrivalPolicy`, so the trail ends exactly where the leg counts as done.
+  A configured stop accepts any cell inside its footprint or within `stop-arrival-buffer` of its
+  bounding box horizontally (`StopAreaGoal`). Any other region accepts its exact shape (`BoxGoal`
+  for cuboids, `PolygonGoal` for polygons), with the heuristic being the distance to the region's
+  bounding box. `PointGoal` (coordinates)
   accepts any cell within `coordinate-arrival-radius` of the point (horizontal only when no y was
   given). Using a goal *set* means the route reaches the nearest entrance, not the region's centre.
 - **Goal inside the window:** standard A\*; the first goal cell popped ends the search →
@@ -208,6 +211,11 @@ each way (default 80, giving 160 × 160), clipped to captured chunks.
   `f = g + h`, where `h` is the straight-line distance to the goal. With an admissible heuristic, the
   first edge cell popped minimises cost-so-far plus straight-line-remaining among all ways out. That cell
   ends the search → `PARTIAL(route, exit)`.
+- **The start cell is never an exit**: a one-cell route leads nowhere.
+- **Goal inside the window but unreachable within it:** search again with exits allowed only next to
+  `UNKNOWN` columns, because the goal may be behind terrain not captured yet. When everything around
+  is known (a sealed building), the result stays `NO_ROUTE`, and that is what triggers the "no route"
+  message.
 - **Exhausted** without a goal or edge cell → `NO_ROUTE`.
 - **Start.** If the player's feet cell is not a surface, snap to the nearest surface within 3 blocks
   (horizontal distance first, then vertical). None → `INVALID_START`.
@@ -237,16 +245,21 @@ States: `WAITING_FOR_TERRAIN → SEARCHING → FOLLOWING ⇄ SEARCHING`, plus `N
 - **Leg start.** Request capture of the window around the player; search once ready (bounded by
   `capture-wait-ms`). This covers arriving at a far stop by teleport: the trail appears once the
   surrounding chunks have loaded and been captured, typically within one to two seconds.
-- **Re-plan triggers** (each subject to `replan-cooldown-ms`, default 2,000, unless noted):
+- **Re-plan triggers** (each subject to `replan-cooldown-ms`, default 2,000, unless noted; any two
+  searches for one player are at least 250 ms apart):
   - the route is `PARTIAL` and the player is within `extend-distance` (default 48) blocks of its end;
   - the player is more than `off-route-distance` (default 6) blocks from the route;
   - a cell within the next `trail-length` cells became impassable (bypasses the cooldown).
-- **Replacing a route.** A new `COMPLETE` route always replaces the old one. A new `PARTIAL` route
-  replaces an old `PARTIAL` route only if the old one is blocked, the player is off it, or the new one's
-  estimated total (route cost + straight-line remainder) is at least 10% lower. This prevents flip-flopping
-  between two near-equal exits as the window moves.
-- **Stitching.** Replacement swaps only the part ahead of the player's nearest point; the trail never
-  jumps behind them.
+- **Replacing a route.** A found route always replaces the old one. If an extension or off-route search
+  fails, the guide keeps following the current route.
+- **Spent exits (anti flip-flop).** When an extension is ordered, the current route's end is recorded
+  as spent for this leg. Later searches won't end within 8 blocks of a spent exit. Without this, a
+  local search can lead the player toward exit A, turn back toward B on discovering a dead end, then
+  forget the dead end once it leaves the window and choose A again. (An earlier draft compared routes
+  with a 10% rule. That rejects legitimate extensions, because each search starts from a different
+  position.)
+- **No stitching needed.** Every route starts at the player, and the trail is drawn only from the
+  player's nearest point forward, so it never jumps behind them.
 - **Teleport detection.** The player is more than 64 blocks from the route, or their world changed → reset
   to `WAITING_FOR_TERRAIN` (or `PAUSED` for another world).
 - **Not on foot.** While the player is flying, gliding or in a vehicle, keep the current route and
@@ -262,7 +275,7 @@ States: `WAITING_FOR_TERRAIN → SEARCHING → FOLLOWING ⇄ SEARCHING`, plus `N
 
 - Drawn with `Player.spawnParticle`, so only the navigating player sees it.
 - From the player's nearest route index forward `trail-length` cells (default 40), one particle per
-  cell, `0.2` blocks above the footing (`y + 0.2`; in water at the surface).
+  cell, `0.2` blocks above the feet cell's floor.
 - Redrawn every `trail-refresh-ticks` (default 10).
 - **Direction pulse.** One brighter particle travels along the drawn section, advancing
   `pulse-step` cells (default 4) per refresh, so the direction of travel is clear even where the trail
@@ -305,7 +318,7 @@ walking-paths:
   capture-wait-ms: 1500
   cache-max-chunks: 4096
   # Walker
-  max-drop: 3
+  max-drop: 3          # 0-5
   water-cost: 2.5
   climb-cost: 2.0
   door-cost: 1.5
@@ -345,7 +358,9 @@ worst main-thread capture time per tick over the last minute.
 - `WindowSearch`:
   - on a few hundred seeded random grids, route cost equals an independent Dijkstra over the same move
     rules;
-  - correct window-edge exit, including a dead-end trap where the nearer-looking exit is wrong;
+  - the chosen exit minimises cost so far plus straight-line remainder, checked against brute force
+    on random worlds and on a wall across the window; spent exits are not reused; the start is never
+    an exit; unknown terrain acts as an edge;
   - region goals reach the nearest cell of the region;
   - `BUDGET` returned at the expansion cap and the time limit;
   - `INVALID_START` when nothing is within snap range.
