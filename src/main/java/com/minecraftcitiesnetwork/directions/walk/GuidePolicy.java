@@ -73,6 +73,9 @@ public final class GuidePolicy {
         if (want == null || inFlight) {
             return null;
         }
+        if ((want == Reason.INITIAL || want == Reason.RETRY) && !o.onFoot()) {
+            return null;
+        }
         long since = o.nowMillis() - lastSearchAt;
         if (since < MIN_INTERVAL_MILLIS) {
             return null;
@@ -85,7 +88,10 @@ public final class GuidePolicy {
             if (spentExits.size() >= MAX_SPENT_EXITS) {
                 spentExits.remove(0);
             }
-            spentExits.add(route.end());
+            Cell end = route.end();
+            if (!spentExits.contains(end)) {
+                spentExits.add(end);
+            }
         }
         inFlight = true;
         inFlightReason = want;

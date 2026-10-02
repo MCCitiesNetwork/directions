@@ -38,6 +38,10 @@ class GuidePolicyTest {
         return new Observation(now, x + 0.5, 65, 0.5, true, false);
     }
 
+    private static Observation at(long now, double x, boolean onFoot) {
+        return new Observation(now, x + 0.5, 65, 0.5, onFoot, false);
+    }
+
     /** A policy following {@code route}, with its one search issued and answered at time 0. */
     private static GuidePolicy following(Route route) {
         GuidePolicy p = new GuidePolicy(TUNING);
@@ -170,5 +174,41 @@ class GuidePolicyTest {
         SearchOrder order = p.tick(at(4000, 60));
         assertNotNull(order);
         assertTrue(order.spentExits().isEmpty());
+    }
+
+    @Test
+    void notOnFootSuppressesInitialSearch() {
+        GuidePolicy p = new GuidePolicy(TUNING);
+        assertNull(p.tick(at(0, 0, false)));
+        SearchOrder order = p.tick(at(0, 0, true));
+        assertNotNull(order);
+        assertEquals(Reason.INITIAL, order.reason());
+    }
+
+    @Test
+    void notOnFootSuppressesRetrySearch() {
+        GuidePolicy p = new GuidePolicy(TUNING);
+        SearchOrder first = p.tick(at(0, 0));
+        p.onResult(first.generation(), noRoute(), 0);
+        assertTrue(p.failed());
+
+        assertNull(p.tick(at(10_000, 0, false)));
+        SearchOrder retry = p.tick(at(10_000, 0, true));
+        assertNotNull(retry);
+        assertEquals(Reason.RETRY, retry.reason());
+    }
+
+    @Test
+    void duplicateSpentExitsAreNotAdded() {
+        GuidePolicy p = following(straight(0, 100, false, 50));
+        SearchOrder first = p.tick(at(3000, 60));
+        p.onResult(first.generation(), noRoute(), 3000);
+        assertEquals(List.of(new Cell(100, 65, 0)), first.spentExits());
+
+        SearchOrder second = p.tick(at(5000, 60));
+        assertNotNull(second);
+        assertEquals(Reason.EXTEND, second.reason());
+        assertEquals(List.of(new Cell(100, 65, 0)), second.spentExits());
+        assertEquals(1, second.spentExits().size());
     }
 }
