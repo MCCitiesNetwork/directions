@@ -8,6 +8,7 @@ import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import com.minecraftcitiesnetwork.directions.model.CostModel;
 import com.minecraftcitiesnetwork.directions.model.Line;
 import com.minecraftcitiesnetwork.directions.model.Stop;
+import com.minecraftcitiesnetwork.directions.walk.WalkSettings;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -86,6 +87,9 @@ public class ConfigLoader {
             if (!walkingTransferPolicy.equals("shared-mode-only") && !walkingTransferPolicy.equals("strict")) {
                 throw new IllegalStateException("Invalid walking-transfer-policy. Use 'shared-mode-only' or 'strict'.");
             }
+            WalkSettings walk = WalkSettingsParser.parse(
+                    root.walkingPaths == null ? new WalkingPathsSection() : root.walkingPaths,
+                    message -> plugin.getLogger().warning(message));
             Map<String, String> lineDisplayNames = readDisplayNameMap(namesRoot.lineDisplayNames);
             Map<String, String> stopDisplayNames = readDisplayNameMap(namesRoot.stopDisplayNames);
 
@@ -154,7 +158,8 @@ public class ConfigLoader {
                     lineDisplayNames,
                     stopDisplayNames,
                     lines,
-                    stops
+                    stops,
+                    walk
             );
         } catch (ConfigurateException e) {
             throw new IllegalStateException("Failed to load config.yml with Configurate", e);
@@ -224,7 +229,8 @@ public class ConfigLoader {
                              Map<String, String> lineDisplayNames,
                              Map<String, String> stopDisplayNames,
                              List<Line> lines,
-                             Map<String, Stop> stopsById) {
+                             Map<String, Stop> stopsById,
+                             WalkSettings walk) {
         public String displayLine(String lineId) {
             String key = lineId.toLowerCase(Locale.ROOT);
             return lineDisplayNames.getOrDefault(key, humanize(key));
@@ -281,6 +287,8 @@ public class ConfigLoader {
         public String walkingTransferPolicy = "shared-mode-only";
         @Setting("lines")
         public Map<String, LineSection> lines = Collections.emptyMap();
+        @Setting("walking-paths")
+        public WalkingPathsSection walkingPaths = new WalkingPathsSection();
     }
 
     @ConfigSerializable
@@ -299,5 +307,75 @@ public class ConfigLoader {
         public String costModel = "distance";
         @Setting("stops")
         public List<String> stops = Collections.emptyList();
+    }
+
+    @ConfigSerializable
+    public static final class WalkingPathsSection {
+        @Setting("enabled")
+        public boolean enabled = true;
+        @Setting("window-radius")
+        public int windowRadius = 80;
+        @Setting("time-budget-ms")
+        public long timeBudgetMs = 50;
+        @Setting("max-expansions")
+        public int maxExpansions = 200_000;
+        @Setting("snapshots-per-tick")
+        public int snapshotsPerTick = 6;
+        @Setting("capture-wait-ms")
+        public long captureWaitMs = 1500;
+        @Setting("cache-max-chunks")
+        public int cacheMaxChunks = 4096;
+        @Setting("max-drop")
+        public int maxDrop = 3;
+        @Setting("water-cost")
+        public double waterCost = 2.5;
+        @Setting("climb-cost")
+        public double climbCost = 2.0;
+        @Setting("door-cost")
+        public double doorCost = 1.5;
+        @Setting("extend-distance")
+        public double extendDistance = 48;
+        @Setting("off-route-distance")
+        public double offRouteDistance = 6;
+        @Setting("replan-cooldown-ms")
+        public long replanCooldownMs = 2000;
+        @Setting("trail-length")
+        public int trailLength = 40;
+        @Setting("trail-refresh-ticks")
+        public int trailRefreshTicks = 10;
+        @Setting("pulse-step")
+        public int pulseStep = 4;
+        @Setting("arrow-look-ahead")
+        public double arrowLookAhead = 6;
+        @Setting("particles")
+        public ParticlesSection particles = new ParticlesSection();
+    }
+
+    @ConfigSerializable
+    public static final class ParticlesSection {
+        @Setting("trail")
+        public ParticleSection trail = ParticleSection.of("DUST", "#5BC0EB", 1.0);
+        @Setting("pulse")
+        public ParticleSection pulse = ParticleSection.of("DUST", "#FFFFFF", 1.4);
+        @Setting("end")
+        public ParticleSection end = ParticleSection.of("HAPPY_VILLAGER", "", 1.0);
+    }
+
+    @ConfigSerializable
+    public static final class ParticleSection {
+        @Setting("type")
+        public String type = "DUST";
+        @Setting("color")
+        public String color = "";
+        @Setting("size")
+        public double size = 1.0;
+
+        static ParticleSection of(String type, String color, double size) {
+            ParticleSection section = new ParticleSection();
+            section.type = type;
+            section.color = color;
+            section.size = size;
+            return section;
+        }
     }
 }
