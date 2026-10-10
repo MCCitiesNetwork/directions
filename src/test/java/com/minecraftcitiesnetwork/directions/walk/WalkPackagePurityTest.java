@@ -11,7 +11,10 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The walking core (everything under walk/ except the bukkit adapter package) must stay testable without a server: no Bukkit, Paper or WorldGuard imports. */
+/**
+ * The walking core (everything under walk/ except the bukkit adapter package) must stay testable
+ * without a server: no Bukkit, Paper or WorldGuard imports.
+ */
 class WalkPackagePurityTest {
     private static final List<String> FORBIDDEN = List.of("import org.bukkit", "import io.papermc", "import com.sk89q");
 

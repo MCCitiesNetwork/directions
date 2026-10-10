@@ -50,7 +50,7 @@ public final class ChunkComponents {
         return describe(chunkX, chunkZ, flood(terrain, chunkX, chunkZ, rules, surfaces, key)).id();
     }
 
-    /** Every cell key of the component. */
+    /** Every cell key of the component; empty when the id is not a surface cell of its chunk. */
     public static Set<Long> cellsOf(Terrain terrain, ComponentId id, WalkRules rules) {
         Map<Long, Integer> surfaces = surfacesOf(terrain, id.chunkX(), id.chunkZ());
         long start = Cell.key(id.x(), id.y(), id.z());

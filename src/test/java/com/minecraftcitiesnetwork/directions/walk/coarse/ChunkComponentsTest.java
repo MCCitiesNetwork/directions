@@ -101,4 +101,51 @@ class ChunkComponentsTest {
         // (7,8), (8,7), (8,9), (9,8) tie at distance 1; (7,8) has the lowest Cell.key
         assertEquals(new ComponentId(0, 0, 7, 65, 8), id);
     }
+
+    @Test
+    void floodStaysInsideTheChunkEvenWhenTheNeighbourChunkIsKnown() {
+        BlockWorld world = new BlockWorld(0).fill(0, 64, 0, 31, 64, 15, BlockKind.SOLID);
+        Terrain terrain = world.terrain();
+        List<Component> components = ChunkComponents.of(terrain, 0, 0, rules);
+        assertEquals(1, components.size());
+        var cells = ChunkComponents.cellsOf(terrain, components.get(0).id(), rules);
+        assertEquals(256, cells.size());
+        assertEquals(16, components.get(0).borderCells().get(Side.EAST).length);
+        for (int z = 0; z < 16; z++) {
+            assertTrue(cells.contains(Cell.key(15, 65, z)));
+            assertTrue(!cells.contains(Cell.key(16, 65, z)));
+        }
+    }
+
+    @Test
+    void everySideReportsItsBorderCells() {
+        Component west = ChunkComponents.of(river().terrain(), 0, 0, rules).get(0);
+        long[] expectedWest = new long[16];
+        long[] expectedNorth = new long[7];
+        for (int i = 0; i < 16; i++) {
+            expectedWest[i] = Cell.key(0, 65, i);
+        }
+        for (int i = 0; i < 7; i++) {
+            expectedNorth[i] = Cell.key(i, 65, 0);
+        }
+        java.util.Arrays.sort(expectedWest);
+        java.util.Arrays.sort(expectedNorth);
+        assertTrue(java.util.Arrays.equals(expectedWest, west.borderCells().get(Side.WEST)));
+        assertTrue(java.util.Arrays.equals(expectedNorth, west.borderCells().get(Side.NORTH)));
+        assertEquals(7, west.borderCells().get(Side.SOUTH).length);
+        assertEquals(0, west.borderCells().get(Side.EAST).length);
+    }
+
+    @Test
+    void negativeChunksWork() {
+        BlockWorld world = new BlockWorld(0).fill(-16, 64, -16, -1, 64, -1, BlockKind.SOLID);
+        Terrain terrain = world.terrain();
+        List<Component> components = ChunkComponents.of(terrain, -1, -1, rules);
+        assertEquals(1, components.size());
+        ComponentId id = components.get(0).id();
+        assertEquals(new ComponentId(-1, -1, -8, 65, -8), id);
+        assertEquals(256, ChunkComponents.cellsOf(terrain, id, rules).size());
+        assertEquals(16, components.get(0).borderCells().get(Side.SOUTH).length);
+        assertEquals(id, ChunkComponents.componentOf(terrain, -1, -1, -16, 65, -1, rules));
+    }
 }
