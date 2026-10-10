@@ -40,12 +40,18 @@ public final class ChunkColumnCache {
     record ChunkKey(UUID world, int x, int z) {
     }
 
+    /** Told about every chunk stored in the {@link ColumnStore}, on the main thread, right after it is stored. */
+    interface CapturedListener {
+        void captured(UUID world, int chunkX, int chunkZ);
+    }
+
     private final JavaPlugin plugin;
     private final ColumnStore store;
     private final MaterialKinds kinds;
     private final Executor decoder;
     private final WalkSettings settings;
     private final WalkStats stats;
+    private final CapturedListener onCaptured;
     private final ArrayDeque<ChunkKey> queue = new ArrayDeque<>();
     private final Set<ChunkKey> dirty = new HashSet<>();
     private final Map<ChunkKey, CompletableFuture<Void>> pending = new ConcurrentHashMap<>();
@@ -53,13 +59,14 @@ public final class ChunkColumnCache {
     private BukkitTask task;
 
     ChunkColumnCache(JavaPlugin plugin, ColumnStore store, MaterialKinds kinds, Executor decoder,
-                     WalkSettings settings, WalkStats stats) {
+                     WalkSettings settings, WalkStats stats, CapturedListener onCaptured) {
         this.plugin = plugin;
         this.store = store;
         this.kinds = kinds;
         this.decoder = decoder;
         this.settings = settings;
         this.stats = stats;
+        this.onCaptured = onCaptured;
     }
 
     void start() {
@@ -210,6 +217,7 @@ public final class ChunkColumnCache {
                 if (result != null && world != null && world.isChunkLoaded(key.x(), key.z())) {
                     store.put(key.world(), result);
                     capturedAt.put(key, System.currentTimeMillis());
+                    onCaptured.captured(key.world(), key.x(), key.z());
                 }
             } finally {
                 finish(key);

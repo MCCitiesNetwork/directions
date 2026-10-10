@@ -55,4 +55,20 @@ class WalkStatsTest {
         assertEquals(0.75, stats.hitRate(), 1e-9);
         assertTrue(stats.describe(812).stream().anyMatch(line -> line.contains("812 chunks") && line.contains("75%")));
     }
+
+    @Test
+    void coarseResultsAreCountedAsGuided() {
+        WalkStats stats = new WalkStats(() -> 0L);
+        stats.record(new SearchResult(SearchResult.Status.PARTIAL, null, 0.0, 0, 1, true));
+        stats.record(SearchResult.failed(SearchResult.Status.NO_ROUTE, 0, 1));
+        assertTrue(stats.describe(0).contains("Coarse: 1 guided, 0 fell back"));
+    }
+
+    @Test
+    void fallbacksAreCounted() {
+        WalkStats stats = new WalkStats(() -> 0L);
+        stats.recordFallback();
+        stats.recordFallback();
+        assertTrue(stats.describe(0).contains("Coarse: 0 guided, 2 fell back"));
+    }
 }

@@ -20,6 +20,8 @@ public final class WalkStats {
     private int next;
     private long hits;
     private long misses;
+    private long guided;
+    private long fallbacks;
     private long worstPump;
     private long previousWorstPump;
     private long pumpWindowStart;
@@ -34,9 +36,17 @@ public final class WalkStats {
         next = (next + 1) % SAMPLES;
         stored = Math.min(stored + 1, SAMPLES);
         results.merge(result.status(), 1L, Long::sum);
+        if (result.coarse()) {
+            guided++;
+        }
         long now = millis.getAsLong();
         recent.addLast(now);
         prune(now);
+    }
+
+    /** A search had a graph and a goal beyond the window, but the coarse graph did not lead it. */
+    public synchronized void recordFallback() {
+        fallbacks++;
     }
 
     public synchronized void cacheHit() {
@@ -97,7 +107,8 @@ public final class WalkStats {
                         percentileNanos(0.50) / 1e6, percentileNanos(0.95) / 1e6, stored),
                 counts.toString(),
                 String.format(Locale.ROOT, "Chunk cache: %d chunks, hit rate %.0f%%", cachedChunks, hitRate() * 100),
-                String.format(Locale.ROOT, "Worst capture tick (last minute): %.2f ms", worstPumpNanos() / 1e6));
+                String.format(Locale.ROOT, "Worst capture tick (last minute): %.2f ms", worstPumpNanos() / 1e6),
+                String.format(Locale.ROOT, "Coarse: %d guided, %d fell back", guided, fallbacks));
     }
 
     private void prune(long now) {

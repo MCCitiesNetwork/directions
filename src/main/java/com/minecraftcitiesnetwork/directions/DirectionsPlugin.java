@@ -10,6 +10,7 @@ import com.minecraftcitiesnetwork.directions.config.ConfigLoader;
 import com.minecraftcitiesnetwork.directions.graph.TransitGraph;
 import com.minecraftcitiesnetwork.directions.i18n.LangService;
 import com.minecraftcitiesnetwork.directions.navigation.NavigationService;
+import com.minecraftcitiesnetwork.directions.walk.bukkit.CoarseGraphs;
 import com.minecraftcitiesnetwork.directions.walk.bukkit.WalkSearchService;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
@@ -19,12 +20,15 @@ public class DirectionsPlugin extends JavaPlugin {
     private TransitGraph transitGraph;
     private NavigationService navigationService;
     private WalkSearchService walkService;
+    private CoarseGraphs coarseGraphs;
     private LangService lang;
 
     @Override
     public void onEnable() {
         this.lang = new LangService(this);
         this.lang.load();
+        this.coarseGraphs = new CoarseGraphs(this);
+        this.coarseGraphs.start();
         reloadDirectionsData();
         this.navigationService = new NavigationService(this);
         this.navigationService.start();
@@ -43,6 +47,9 @@ public class DirectionsPlugin extends JavaPlugin {
             navigationService.stop();
         }
         stopWalking();
+        if (coarseGraphs != null) {
+            coarseGraphs.stop();
+        }
     }
 
     public void reloadDirectionsData() {
@@ -66,7 +73,7 @@ public class DirectionsPlugin extends JavaPlugin {
     private void restartWalking() {
         stopWalking();
         if (loadedData.walk().enabled()) {
-            walkService = new WalkSearchService(this, loadedData.walk());
+            walkService = new WalkSearchService(this, loadedData.walk(), coarseGraphs);
             walkService.start();
         }
     }
