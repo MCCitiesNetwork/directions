@@ -43,7 +43,7 @@ public final class WalkGuide {
         GuidePolicy.SearchOrder order = policy.tick(new GuidePolicy.Observation(
                 System.currentTimeMillis(), at.getX(), at.getY(), at.getZ(), onFoot, blocked));
         if (order != null) {
-            service.plan(world, at.getX(), at.getY(), at.getZ(), goal, order.spentExits())
+            service.plan(world, at.getX(), at.getY(), at.getZ(), goal, order.routeEnd())
                     .thenAccept(result -> policy.onResult(order.generation(), result, System.currentTimeMillis()));
         }
     }

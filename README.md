@@ -36,6 +36,9 @@ destination, and the whole way for `/gps` and `/compass`. Rides between stops ge
   doors and gates. It never crosses fences, walls, panes, lava, fire, cactus or magma.
 - While a route is only partly known, the boss bar shows `~` before the distance (add `<approx>`
   to a custom `bossbar-format` to get this).
+- When the route is extended or re-planned, the new route keeps you going the way you were headed
+  unless turning back saves a lot. The search only sees about 80 blocks ahead, so along a river or
+  wall it may follow the bank for a while before finding the crossing.
 - If no route can be found nearby, you get one message and the straight arrow, and it retries as
   you move.
 

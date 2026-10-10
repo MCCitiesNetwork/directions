@@ -211,6 +211,15 @@ each way (default 80, giving 160 × 160), clipped to captured chunks.
   `f = g + h`, where `h` is the straight-line distance to the goal. With an admissible heuristic, the
   first edge cell popped minimises cost-so-far plus straight-line-remaining among all ways out. That cell
   ends the search → `PARTIAL(route, exit)`.
+- **Turn-back penalty.** A request may carry the end of the route the player is already following.
+  An edge cell then costs extra in proportion to how far behind the player it lies: three window radii
+  times the cosine of the angle between "start → edge cell" and "start → route end", when that angle
+  is obtuse; nothing when the edge cell is ahead or beside. The first search of a leg carries no route
+  end and pays no penalty. A penalised edge cell is still expanded, so the search finds a way on if
+  one exists and falls back to the turn only when nothing cheaper is left. Three radii is chosen so
+  that two opposite exits, whose straight-line remainders differ by at most two radii, never trade
+  places on that difference alone: the window cannot see whether the way ahead continues, so the
+  player is led on unless turning back saves more than a window radius beyond that.
 - **The start cell is never an exit**: a one-cell route leads nowhere.
 - **Goal inside the window but unreachable within it:** search again with exits allowed only next to
   `UNKNOWN` columns, because the goal may be behind terrain not captured yet. When everything around
@@ -252,12 +261,17 @@ States: `WAITING_FOR_TERRAIN → SEARCHING → FOLLOWING ⇄ SEARCHING`, plus `N
   - a cell within the next `trail-length` cells became impassable (bypasses the cooldown).
 - **Replacing a route.** A found route always replaces the old one. If an extension or off-route search
   fails, the guide keeps following the current route.
-- **Spent exits (anti flip-flop).** When an extension is ordered, the current route's end is recorded
-  as spent for this leg. Later searches won't end within 8 blocks of a spent exit. Without this, a
+- **Keeping direction (anti flip-flop).** Every search after the first carries the current route's
+  end, and the search's turn-back penalty (§6.2) makes exits behind the player dear. Without this, a
   local search can lead the player toward exit A, turn back toward B on discovering a dead end, then
-  forget the dead end once it leaves the window and choose A again. (An earlier draft compared routes
-  with a 10% rule. That rejects legitimate extensions, because each search starts from a different
-  position.)
+  forget the dead end once it leaves the window and choose A again; and along an obstacle longer than
+  the window, the straight-line heuristic bounces the player from side to side. Two earlier drafts
+  were rejected: comparing routes with a 10% rule rejects legitimate extensions, because each search
+  starts from a different position; and recording "spent" exits that later searches may not end near
+  turned the player around whenever the next window's border fell within that distance of the old
+  exit, which happens on every extension with a small window. The penalty is a bound, not a cure: it
+  commits the player to the side of an obstacle the first search picked, up to three window radii
+  of straight-line disadvantage. Obstacles longer than that need the coarse layer of §11.
 - **No stitching needed.** Every route starts at the player, and the trail is drawn only from the
   player's nearest point forward, so it never jumps behind them.
 - **Teleport detection.** The player is more than 64 blocks from the route, or their world changed → reset
@@ -359,14 +373,20 @@ worst main-thread capture time per tick over the last minute.
   - on a few hundred seeded random grids, route cost equals an independent Dijkstra over the same move
     rules;
   - the chosen exit minimises cost so far plus straight-line remainder, checked against brute force
-    on random worlds and on a wall across the window; spent exits are not reused; the start is never
-    an exit; unknown terrain acts as an edge;
+    on random worlds and on a wall across the window; an exit behind the route being followed is
+    passed over for one beside or ahead, and still taken when it is the only way out; the start is
+    never an exit; unknown terrain acts as an edge;
   - region goals reach the nearest cell of the region;
   - `BUDGET` returned at the expansion cap and the time limit;
   - `INVALID_START` when nothing is within snap range.
 - `Route`: nearest index, remaining distance, look-ahead, stitching.
-- `GuidePolicy`, with a fake clock and fake searches: each re-plan trigger, cooldown, the 10% rule,
-  stale-result drop, teleport reset, terrain wait, failure retry, not-on-foot suppression.
+- `GuidePolicy`, with a fake clock and fake searches: each re-plan trigger, cooldown, the route end
+  carried on every search after the first, stale-result drop, teleport reset, terrain wait, failure
+  retry, not-on-foot suppression.
+- Whole walks (`GuideSimulationTest`): a simulated player follows `GuidePolicy` and `WindowSearch`
+  across synthetic cities at the full and the smallest window: open field, road grid, a single road,
+  a river bank with the bridge outside the window, and a dead end whose way around lies behind. The
+  trail never turns the player back except once at the real dead end, and extension never fails.
 - Architecture: no class under `walk` (excluding `walk.bukkit`) imports `org.bukkit`.
 
 **Manual acceptance on a dev server (`./gradlew runServer`), recorded in the PR:**
@@ -387,4 +407,7 @@ worst main-thread capture time per tick over the last minute.
 A coarse whole-world layer can be added without changing the units above: a `CoarseGuide` supplies an
 intermediate goal for each window (the next coarse waypoint) in place of the final goal's straight-line
 heuristic. `WindowSearch`, `Terrain`, `GuidePolicy` and the trail are unaffected. Trigger for doing it:
-manual testing or player reports show long walks being led into large dead ends.
+manual testing or player reports show long walks being led into large dead ends. Observed during
+acceptance in October 2026 (a trail that turned the player around after an extension) and
+reproduced by `GuideSimulationTest`: the turn-back penalty bounds the damage, and this layer is the
+next piece of work.

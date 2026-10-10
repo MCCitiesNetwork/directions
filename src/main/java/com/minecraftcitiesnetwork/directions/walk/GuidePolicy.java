@@ -1,8 +1,5 @@
 package com.minecraftcitiesnetwork.directions.walk;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Decides when one walking leg needs a new search and what to do with the answer. Pure: the caller
  * supplies time, position and search results. One instance per walking leg; not thread-safe.
@@ -13,7 +10,6 @@ public final class GuidePolicy {
     public static final double RETRY_DISTANCE = 16;
     public static final long MIN_INTERVAL_MILLIS = 250;
     public static final long TERRAIN_WAIT_MILLIS = 1000;
-    public static final int MAX_SPENT_EXITS = 32;
 
     public record Tuning(double extendDistance, double offRouteDistance, long cooldownMillis) {
     }
@@ -26,7 +22,8 @@ public final class GuidePolicy {
     public record Observation(long nowMillis, double x, double y, double z, boolean onFoot, boolean blockedAhead) {
     }
 
-    public record SearchOrder(int generation, Reason reason, List<Cell> spentExits) {
+    /** @param routeEnd the end of the route being followed, or null for the leg's first search */
+    public record SearchOrder(int generation, Reason reason, Cell routeEnd) {
     }
 
     private enum State {
@@ -34,7 +31,6 @@ public final class GuidePolicy {
     }
 
     private final Tuning tuning;
-    private final List<Cell> spentExits = new ArrayList<>();
     private State state = State.IDLE;
     private int generation;
     private Route route;
@@ -86,19 +82,10 @@ public final class GuidePolicy {
         if ((want == Reason.EXTEND || want == Reason.OFF_ROUTE) && !cooled) {
             return null;
         }
-        if (want == Reason.EXTEND) {
-            Cell end = route.end();
-            if (!spentExits.contains(end)) {
-                if (spentExits.size() >= MAX_SPENT_EXITS) {
-                    spentExits.remove(0);
-                }
-                spentExits.add(end);
-            }
-        }
         inFlight = true;
         inFlightReason = want;
         lastSearchAt = o.nowMillis();
-        return new SearchOrder(generation, want, List.copyOf(spentExits));
+        return new SearchOrder(generation, want, route == null ? null : route.end());
     }
 
     public void onResult(int resultGeneration, SearchResult result, long nowMillis) {
@@ -139,7 +126,6 @@ public final class GuidePolicy {
         cursor = 0;
         state = State.IDLE;
         waitUntil = Long.MIN_VALUE;
-        spentExits.clear();
     }
 
     public Route route() {

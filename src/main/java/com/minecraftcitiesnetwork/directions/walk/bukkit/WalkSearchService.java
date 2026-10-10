@@ -16,7 +16,6 @@ import org.bukkit.World;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -89,8 +88,10 @@ public final class WalkSearchService {
     /**
      * Main thread. Captures the window around the position, searches it on the pool, and completes
      * the returned future on the main thread. Never completes exceptionally.
+     *
+     * @param routeEnd the end of the route the player is following, or null when they have none
      */
-    public CompletableFuture<SearchResult> plan(World world, double x, double y, double z, Goal goal, List<Cell> spentExits) {
+    public CompletableFuture<SearchResult> plan(World world, double x, double y, double z, Goal goal, Cell routeEnd) {
         CompletableFuture<SearchResult> result = new CompletableFuture<>();
         if (!running) {
             result.complete(SearchResult.failed(SearchResult.Status.NO_ROUTE, 0, 0));
@@ -101,7 +102,7 @@ public final class WalkSearchService {
         Window window = Window.around((int) Math.floor(x), (int) Math.floor(z), radius);
         cache.capture(world, window).thenRunAsync(() -> {
             long deadline = System.nanoTime() + settings.timeBudgetMillis() * 1_000_000L;
-            SearchRequest request = new SearchRequest(x, y, z, goal, window, spentExits, settings.maxExpansions(), deadline);
+            SearchRequest request = new SearchRequest(x, y, z, goal, window, routeEnd, settings.maxExpansions(), deadline);
             SearchResult r = search.search(store.terrain(worldId), request);
             stats.record(r);
             toMain(() -> result.complete(r));

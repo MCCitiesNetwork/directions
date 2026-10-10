@@ -56,7 +56,7 @@ class GuidePolicyTest {
         assertNotNull(order);
         assertEquals(Reason.INITIAL, order.reason());
         assertEquals(0, order.generation());
-        assertTrue(order.spentExits().isEmpty());
+        assertNull(order.routeEnd());
     }
 
     @Test
@@ -84,13 +84,13 @@ class GuidePolicyTest {
     }
 
     @Test
-    void partialRouteIsExtendedNearItsEndAndItsExitIsSpent() {
+    void partialRouteIsExtendedNearItsEndTowardThatEnd() {
         GuidePolicy p = following(straight(0, 100, false, 50));
         assertNull(p.tick(at(3000, 40)));
         SearchOrder order = p.tick(at(3000, 60));
         assertNotNull(order);
         assertEquals(Reason.EXTEND, order.reason());
-        assertEquals(List.of(new Cell(100, 65, 0)), order.spentExits());
+        assertEquals(new Cell(100, 65, 0), order.routeEnd());
     }
 
     @Test
@@ -166,14 +166,14 @@ class GuidePolicyTest {
     }
 
     @Test
-    void resetForgetsSpentExits() {
+    void resetStartsAgainWithoutARouteToKeepTo() {
         GuidePolicy p = following(straight(0, 100, false, 50));
         SearchOrder extend = p.tick(at(3000, 60));
         p.onResult(extend.generation(), noRoute(), 3000);
         p.reset();
         SearchOrder order = p.tick(at(4000, 60));
         assertNotNull(order);
-        assertTrue(order.spentExits().isEmpty());
+        assertNull(order.routeEnd());
     }
 
     @Test
@@ -199,17 +199,15 @@ class GuidePolicyTest {
     }
 
     @Test
-    void duplicateSpentExitsAreNotAdded() {
+    void failedExtensionIsRetriedTowardTheSameEnd() {
         GuidePolicy p = following(straight(0, 100, false, 50));
         SearchOrder first = p.tick(at(3000, 60));
         p.onResult(first.generation(), noRoute(), 3000);
-        assertEquals(List.of(new Cell(100, 65, 0)), first.spentExits());
 
         SearchOrder second = p.tick(at(5000, 60));
         assertNotNull(second);
         assertEquals(Reason.EXTEND, second.reason());
-        assertEquals(List.of(new Cell(100, 65, 0)), second.spentExits());
-        assertEquals(1, second.spentExits().size());
+        assertEquals(new Cell(100, 65, 0), second.routeEnd());
     }
 
     @Test

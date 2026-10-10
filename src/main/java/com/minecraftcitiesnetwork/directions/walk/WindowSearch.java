@@ -10,12 +10,18 @@ import java.util.function.LongSupplier;
 
 /**
  * A* over walkable surfaces inside a window. Reaches the goal when it can; when no goal cell can be
- * in the window, ends at the exit that minimises cost so far plus straight-line distance onward.
+ * in the window, ends at the exit that minimises cost so far plus straight-line distance onward,
+ * plus a penalty for exits that lead away from the route the player is already following.
  * Deterministic: identical inputs give identical routes. Safe to share between threads.
  */
 public final class WindowSearch {
     public static final int SNAP_RADIUS = 3;
-    public static final int SPENT_EXIT_RADIUS = 8;
+    /**
+     * Turning straight back costs this many window radii extra. Opposite exits differ by at most two
+     * radii of straight-line distance, so the player is led on unless a turn saves more than one
+     * radius beyond that; the local search cannot know whether the way ahead continues.
+     */
+    public static final double TURN_BACK_FACTOR = 3.0;
     private static final int CLOCK_CHECK_MASK = 255;
 
     /** The surface a search starts from. */
@@ -62,6 +68,8 @@ public final class WindowSearch {
     private SearchResult run(Terrain terrain, SearchRequest request, Start start, Exits exits, long started) {
         Window window = request.window();
         Goal goal = request.goal();
+        double[] committed = committedDirection(request, start);
+        double turnBackPenalty = TURN_BACK_FACTOR * (window.maxX() - window.minX()) / 2.0;
         Map<Long, Node> nodes = new HashMap<>();
         PriorityQueue<Entry> open = new PriorityQueue<>();
         Node first = new Node(start.x(), start.y(), start.z(), start.surface());
@@ -72,6 +80,9 @@ public final class WindowSearch {
         while (!open.isEmpty()) {
             Entry entry = open.poll();
             Node node = entry.node();
+            if (entry.exit()) {
+                return finish(SearchResult.Status.PARTIAL, node, entry.h(), expansions, started);
+            }
             if (node.closed || entry.g() != node.g) {
                 continue;
             }
@@ -80,7 +91,14 @@ public final class WindowSearch {
                 return finish(SearchResult.Status.COMPLETE, node, 0.0, expansions, started);
             }
             if (exits != Exits.NONE && node != first && isExit(terrain, request, node.x, node.z, exits == Exits.ANY)) {
-                return finish(SearchResult.Status.PARTIAL, node, goal.estimate(node.x, node.y, node.z), expansions, started);
+                double h = goal.estimate(node.x, node.y, node.z);
+                double penalty = turnBackPenalty * turnBack(committed, start, node);
+                if (penalty == 0.0) {
+                    return finish(SearchResult.Status.PARTIAL, node, h, expansions, started);
+                }
+                // Leaving here is allowed but dear: keep looking for a way on, and take this exit
+                // only once nothing cheaper is left.
+                open.add(Entry.exit(node, node.g + penalty, h));
             }
             if (expansions >= request.maxExpansions()) {
                 return SearchResult.failed(SearchResult.Status.BUDGET, expansions, nanoClock.getAsLong() - started);
@@ -156,18 +174,35 @@ public final class WindowSearch {
     }
 
     private static boolean isExit(Terrain terrain, SearchRequest request, int x, int z, boolean border) {
-        boolean edge = (border && request.window().onBorder(x, z))
+        return (border && request.window().onBorder(x, z))
                 || terrain.surfaces(x + 1, z) == null || terrain.surfaces(x - 1, z) == null
                 || terrain.surfaces(x, z + 1) == null || terrain.surfaces(x, z - 1) == null;
-        if (!edge) {
-            return false;
+    }
+
+    /** The unit direction from the start to the route the player is following, or null without one. */
+    private static double[] committedDirection(SearchRequest request, Start start) {
+        Cell end = request.routeEnd();
+        if (end == null) {
+            return null;
         }
-        for (Cell spent : request.spentExits()) {
-            if (Math.abs(spent.x() - x) <= SPENT_EXIT_RADIUS && Math.abs(spent.z() - z) <= SPENT_EXIT_RADIUS) {
-                return false;
-            }
+        double dx = end.x() - start.x();
+        double dz = end.z() - start.z();
+        double length = Math.hypot(dx, dz);
+        return length == 0.0 ? null : new double[] {dx / length, dz / length};
+    }
+
+    /** 0 for an exit ahead of or beside the committed direction, up to 1 for one straight behind. */
+    private static double turnBack(double[] committed, Start start, Node exit) {
+        if (committed == null) {
+            return 0.0;
         }
-        return true;
+        double dx = exit.x - start.x();
+        double dz = exit.z - start.z();
+        double length = Math.hypot(dx, dz);
+        if (length == 0.0) {
+            return 0.0;
+        }
+        return Math.max(0.0, -(dx * committed[0] + dz * committed[1]) / length);
     }
 
     private SearchResult finish(SearchResult.Status status, Node last, double endEstimate, int expansions, long started) {
@@ -199,10 +234,17 @@ public final class WindowSearch {
         }
     }
 
-    /** A queue entry; stale once its node has a lower g. Ties break on h, then on position. */
-    private record Entry(Node node, double g, double f, double h) implements Comparable<Entry> {
+    /**
+     * A queue entry; stale once its node has a lower g. An exit entry ends the search when popped
+     * and carries the turn-back penalty in its g. Ties break on h, then on position.
+     */
+    private record Entry(Node node, double g, double f, double h, boolean exit) implements Comparable<Entry> {
         Entry(Node node, double g, double h) {
-            this(node, g, g + h, h);
+            this(node, g, g + h, h, false);
+        }
+
+        static Entry exit(Node node, double g, double h) {
+            return new Entry(node, g, g + h, h, true);
         }
 
         @Override

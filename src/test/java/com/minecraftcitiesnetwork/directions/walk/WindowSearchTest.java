@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Random;
@@ -39,7 +38,7 @@ class WindowSearchTest {
     }
 
     private static SearchRequest request(double x, double y, double z, Goal goal, Window window) {
-        return new SearchRequest(x, y, z, goal, window, List.of(), 1_000_000, Long.MAX_VALUE);
+        return new SearchRequest(x, y, z, goal, window, null, 1_000_000, Long.MAX_VALUE);
     }
 
     private static BoxGoal at(int x, int y, int z) {
@@ -112,14 +111,25 @@ class WindowSearchTest {
     }
 
     @Test
-    void spentExitIsNotOfferedAgain() {
+    void exitBehindTheRouteBeingFollowedCostsExtra() {
+        // On a one-block-wide road, heading west toward (-20, 0) while the goal lies east. Turning
+        // east would save 40 blocks of straight-line distance, less than the three-radius penalty.
+        BlockWorld road = new BlockWorld(64).fill(-20, 64, 0, 40, 64, 0, BlockKind.SOLID);
         SearchRequest req = new SearchRequest(0.5, 65, 0.5, at(35, 65, 0), Window.around(0, 0, 20),
-                List.of(new Cell(20, 65, 0)), 1_000_000, Long.MAX_VALUE);
-        SearchResult r = SEARCH.search(field().terrain(), req);
+                new Cell(-20, 65, 0), 1_000_000, Long.MAX_VALUE);
+        SearchResult r = SEARCH.search(allKnown(road), req);
         assertEquals(SearchResult.Status.PARTIAL, r.status());
-        Cell end = r.route().end();
-        assertTrue(Math.abs(end.x() - 20) > WindowSearch.SPENT_EXIT_RADIUS || Math.abs(end.z()) > WindowSearch.SPENT_EXIT_RADIUS,
-                "re-used the spent exit: " + end);
+        assertEquals(-20, r.route().end().x(), "turned back: " + r.route().end());
+    }
+
+    @Test
+    void exitBehindTheRouteBeingFollowedIsTakenWhenItIsTheOnlyWayOut() {
+        BlockWorld world = flat(40, 40).fill(10, 65, 0, 10, 66, 39, BlockKind.SOLID);
+        SearchRequest req = new SearchRequest(5.5, 65, 10.5, at(35, 65, 10), new Window(0, 0, 20, 20),
+                new Cell(20, 65, 10), 1_000_000, Long.MAX_VALUE);
+        SearchResult r = SEARCH.search(allKnown(world), req);
+        assertEquals(SearchResult.Status.PARTIAL, r.status());
+        assertTrue(r.route().end().x() < 10, "exit must be on this side of the wall: " + r.route().end());
     }
 
     @Test
@@ -133,7 +143,7 @@ class WindowSearchTest {
 
     @Test
     void expansionCapReportsBudget() {
-        SearchRequest req = new SearchRequest(0.5, 65, 0.5, at(0, 200, 0), new Window(0, 0, 39, 39), List.of(), 5, Long.MAX_VALUE);
+        SearchRequest req = new SearchRequest(0.5, 65, 0.5, at(0, 200, 0), new Window(0, 0, 39, 39), null, 5, Long.MAX_VALUE);
         assertEquals(SearchResult.Status.BUDGET, SEARCH.search(flat(40, 40).terrain(), req).status());
     }
 
@@ -141,7 +151,7 @@ class WindowSearchTest {
     void deadlineReportsBudget() {
         AtomicLong clock = new AtomicLong();
         WindowSearch slow = new WindowSearch(RULES, () -> clock.addAndGet(1_000_000));
-        SearchRequest req = new SearchRequest(0.5, 65, 0.5, at(0, 200, 0), new Window(0, 0, 39, 39), List.of(), 1_000_000, 1);
+        SearchRequest req = new SearchRequest(0.5, 65, 0.5, at(0, 200, 0), new Window(0, 0, 39, 39), null, 1_000_000, 1);
         assertEquals(SearchResult.Status.BUDGET, slow.search(flat(40, 40).terrain(), req).status());
     }
 
