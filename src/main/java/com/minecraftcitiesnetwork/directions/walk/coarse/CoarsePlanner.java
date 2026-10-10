@@ -84,19 +84,37 @@ public final class CoarsePlanner {
         return new Plan(waypoint, new CellSetGoal(cells), remaining);
     }
 
-    /** Every node of every chunk overlapping the goal's bounds whose height range overlaps them too. */
+    /**
+     * The nodes of the chunks overlapping the goal's bounds whose height range overlaps them too;
+     * of those, only the ones whose representative cell is in the goal when there are any, so the
+     * coarse path ends on the goal rather than beside it. Only chunks the graph has are visited, so
+     * a goal the size of the world costs no more than the graph.
+     */
     public static Set<ComponentId> goalNodes(CoarseGraph graph, Goal goal) {
+        CoarseGraph.ChunkBounds extent = graph.bounds();
+        if (extent == null) {
+            return Set.of();
+        }
         Bounds bounds = goal.bounds();
-        Set<ComponentId> nodes = new HashSet<>();
-        for (int cx = bounds.minX() >> 4; cx <= bounds.maxX() >> 4; cx++) {
-            for (int cz = bounds.minZ() >> 4; cz <= bounds.maxZ() >> 4; cz++) {
+        int minCx = Math.max(bounds.minX() >> 4, extent.minX());
+        int maxCx = Math.min(bounds.maxX() >> 4, extent.maxX());
+        int minCz = Math.max(bounds.minZ() >> 4, extent.minZ());
+        int maxCz = Math.min(bounds.maxZ() >> 4, extent.maxZ());
+        Set<ComponentId> overlapping = new HashSet<>();
+        Set<ComponentId> inside = new HashSet<>();
+        for (int cx = minCx; cx <= maxCx; cx++) {
+            for (int cz = minCz; cz <= maxCz; cz++) {
                 for (CoarseNode node : graph.nodesOf(cx, cz)) {
                     if (node.maxY() >= bounds.minY() && node.minY() <= bounds.maxY()) {
-                        nodes.add(node.id());
+                        ComponentId id = node.id();
+                        overlapping.add(id);
+                        if (goal.contains(id.x(), id.y(), id.z())) {
+                            inside.add(id);
+                        }
                     }
                 }
             }
         }
-        return nodes;
+        return inside.isEmpty() ? overlapping : inside;
     }
 }

@@ -152,6 +152,18 @@ class CoarseGraphTest {
     }
 
     @Test
+    void boundsCoverEveryChunkEverPut() {
+        CoarseGraph graph = new CoarseGraph();
+        assertNull(graph.bounds());
+        graph.replace(2, -3, List.of(node(id(2, -3))), EnumSet.noneOf(Side.class));
+        assertEquals(new CoarseGraph.ChunkBounds(2, -3, 2, -3), graph.bounds());
+        graph.replace(-5, 4, List.of(), EnumSet.noneOf(Side.class));
+        assertEquals(new CoarseGraph.ChunkBounds(-5, -3, 2, 4), graph.bounds());
+        CoarseGraph copy = CoarseGraph.of(graph.snapshot());
+        assertEquals(graph.bounds(), copy.bounds());
+    }
+
+    @Test
     void chunkKeysRoundTripNegatives() {
         long key = ChunkKeys.key(-5, 7);
         assertEquals(-5, ChunkKeys.x(key));

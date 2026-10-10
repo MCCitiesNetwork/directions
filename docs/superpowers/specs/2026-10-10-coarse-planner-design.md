@@ -102,7 +102,9 @@ walk/
       step 3.
    b. Goal nodes: for every chunk that the goal's bounding box overlaps, every node of that chunk whose
       height range overlaps the goal's. Region goals use their region's box; `PointGoal` uses its
-      radius; a goal without a height uses the world's full range. Empty (goal area not built) → step 3.
+      radius; a goal without a height uses the world's full range. Of those, only the nodes whose
+      representative cell is in the goal, when there are any. Only chunks within the graph's chunk
+      extent (`CoarseGraph.bounds()`, kept on `replace`) are visited. Empty (goal area not built) → step 3.
    c. `CoarseSearch` with `coarse.max-expansions`. `NO_PATH` or `BUDGET` → step 3.
    d. `Waypoints.pick`: the last node of the path's leading run of in-window, captured nodes. Null → step 3.
    e. Flood the waypoint chunk from the waypoint's representative cell to collect the component's

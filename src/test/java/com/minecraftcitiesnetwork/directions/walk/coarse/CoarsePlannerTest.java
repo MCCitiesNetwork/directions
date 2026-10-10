@@ -11,6 +11,7 @@ import com.minecraftcitiesnetwork.directions.walk.Window;
 import com.minecraftcitiesnetwork.directions.walk.WindowSearch;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CoarsePlannerTest {
@@ -152,6 +154,27 @@ class CoarsePlannerTest {
                 ChunkKeys.key(-1, -3), List.of(new CoarseNode(beside, 60, 66, List.of()))));
         Goal goal = new BoxGoal(-30, 60, -40, -20, 70, -35);
         assertEquals(Set.of(low), CoarsePlanner.goalNodes(graph, goal));
+    }
+
+    @Test
+    void goalNodesPreferThoseWhoseRepresentativeIsInTheGoal() {
+        // Both components of the chunk overlap the goal's box and heights; only one's representative is inside.
+        ComponentId inside = new ComponentId(0, 0, 4, 64, 4);
+        ComponentId outside = new ComponentId(0, 0, 12, 64, 12);
+        CoarseGraph graph = CoarseGraph.of(Map.of(ChunkKeys.key(0, 0), List.of(
+                new CoarseNode(inside, 60, 66, List.of()), new CoarseNode(outside, 60, 66, List.of()))));
+        assertEquals(Set.of(inside), CoarsePlanner.goalNodes(graph, new BoxGoal(2, 60, 2, 6, 70, 6)));
+        // When no representative is inside, every overlapping node is a goal node.
+        assertEquals(Set.of(inside, outside), CoarsePlanner.goalNodes(graph, new BoxGoal(7, 60, 7, 9, 70, 9)));
+    }
+
+    @Test
+    void goalNodesOfAHugeGoalLookOnlyAtTheGraphsChunks() {
+        Goal everywhere = new BoxGoal(-30_000_000, -64, -30_000_000, 30_000_000, 320, 30_000_000);
+        Set<ComponentId> nodes = assertTimeoutPreemptively(Duration.ofSeconds(2),
+                () -> CoarsePlanner.goalNodes(FULL_GRAPH, everywhere));
+        assertEquals(FULL_GRAPH.size(), nodes.size());
+        assertTrue(CoarsePlanner.goalNodes(new CoarseGraph(), everywhere).isEmpty());
     }
 
     @Test
