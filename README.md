@@ -51,8 +51,8 @@ connect. With it, routes head for bridges and gaps the window cannot see.
 
 - Build it with `/directions walk build <world>` (permission `directions.debug`). It runs in the
   background. Check progress with `/directions debug walk`. A city the size of Reveille takes about
-  50 minutes at the default rate and holds about two million graph nodes, roughly 200 MB of memory
-  and a 25 MB file. `/directions walk build stop` stops it and saves progress. Running
+  55 minutes at the default rate and holds about one and a half million graph nodes, roughly 160 MB
+  of memory and a 21 MB file. `/directions walk build stop` stops it and saves progress. Running
   `/directions walk build <world>` again, even after a restart, resumes where it stopped.
 - The graph is saved in `plugins/Directions/walk/`, one `.coarse` file per world. It loads in the
   background on startup.

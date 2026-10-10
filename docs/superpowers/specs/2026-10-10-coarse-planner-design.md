@@ -174,11 +174,10 @@ coarse routing (`coarse.enabled: false`) also stops a running build, saving its 
 the plugin saves and stops it.
 
 Reveille (measured): 259,968 existing chunks in 521 region files, about an hour at 4 chunks per tick.
-Measured again on 2026-10-10 on the dev copy: 50 minutes at about 80 chunks per second; of the
-241,469 chunks the headers listed, 110,349 were never generated and were skipped, and the graph
-holds 2,066,069 nodes in 132,531 chunks (15.6 per chunk). These counts include duplicate nodes from
-one-way drops (`ChunkComponents` floods reachability, not mutual connectivity; see the final fix
-report), so a corrected graph will differ.
+Measured again on 2026-10-10 on the dev copy, from scratch with undirected components: 54 minutes
+at about 80 chunks per second; of the 259,968 chunks the headers list, 127,437 were never generated
+and were skipped, and the graph holds 1,507,196 nodes in 132,531 chunks (11.4 per chunk) with
+1,884,488 edge entries. The busiest node has 165 edges.
 
 ## 6. Keeping it current
 
@@ -224,18 +223,16 @@ per node: chunk x, chunk z (ints); representative x, y, z (ints); minY, maxY (sh
 empty-chunk count (int); per empty chunk: chunk x, chunk z (ints)
 ```
 
-About 60 bytes per node before compression. Measured on Reveille's dev copy (983,863 nodes in
-66,933 chunks, the last save before the edge-count failure in the final fix report): 12.0 MB on disk
-(about 12 bytes per node), read in 0.8 s, written in 1.8 s; the whole graph of 2.07 million nodes
-projects to about 25 MB and 4 s. A save over 1 s is logged at INFO, and the plugin's disable waits up
-to 60 s for the last save.
+About 60 bytes per node before compression. Measured on Reveille's dev copy (1,507,196 nodes in
+132,531 chunks): 20.5 MB on disk (about 14 bytes per node), written in 3.1 s by the server's final
+save, read in 1.0 s. A save over 1 s is logged at INFO, and the plugin's disable waits up to 60 s for
+the last save.
 
 In memory, with every edge sharing its target node's `ComponentId` instance (`CoarseGraph.replace`
-and the reader canonicalise edges), a node costs about 106 bytes of heap: dropping the 983,863-node
-graph on the dev server freed 99 MB after a full GC, and a standalone load measured the same. The
-whole Reveille graph projects to about 210 MB (the server's class histogram showed 66 MB of
-`CoarseNode` and 66 MB of `ComponentId` for 2.07 million nodes). That is under the 300 MB line, so
-the node layout is not packed further. Written to a temporary file and renamed into place, never partially. Loaded
+and the reader canonicalise edges), a node costs about 106 bytes of heap: dropping the whole
+Reveille graph with a reload to `coarse.enabled: false` freed 156 MB after a full GC (and loading it
+again took 154 MB); a standalone load measured 152 MB. That is under the 300 MB line, so the node
+layout is not packed further. Written to a temporary file and renamed into place, never partially. Loaded
 asynchronously on plugin enable; searches run without the graph until it is in memory. A file that
 fails to read (bad magic, truncated, another version, another world's file) is moved to
 `<world UUID>.coarse.bad` (replacing an older one), so the next save cannot overwrite it; one warning
