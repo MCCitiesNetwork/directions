@@ -118,6 +118,10 @@ public final class CoarseBuilder {
         this.chunksPerTick = settings.coarse().buildChunksPerTick();
         this.rules = new WalkRules(settings.walker());
         this.enabled = settings.coarse().enabled();
+        if (!enabled) {
+            // The graphs are about to be dropped from memory: stop and save rather than build into nothing.
+            stop();
+        }
     }
 
     /**

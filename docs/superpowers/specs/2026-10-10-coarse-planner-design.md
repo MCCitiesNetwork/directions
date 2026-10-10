@@ -210,8 +210,9 @@ empty-chunk count (int); per empty chunk: chunk x, chunk z (ints)
 About 60 bytes per node before compression; Reveille's million-odd nodes come to roughly 60 MB raw
 and 15 MB compressed. Written to a temporary file and renamed into place, never partially. Loaded
 asynchronously on plugin enable; searches run without the graph until it is in memory. A file that
-fails to read (bad magic, truncated, newer version) logs one warning naming the file, and the world
-runs without a graph until rebuilt.
+fails to read (bad magic, truncated, newer version, another world's file) is moved to
+`<world UUID>.coarse.bad` (replacing an older one), so the next save cannot overwrite it; one warning
+names the file and says where it went, and the world runs without a graph until rebuilt.
 
 Saved: on build progress, on `/directions walk build stop`, on plugin disable, and otherwise every ten
 minutes if the graph changed.
@@ -231,7 +232,11 @@ Under `walking-paths:`:
 ```
 
 Parsed by `WalkSettingsParser` with the same warn-and-default rule. `enabled: false` skips §4 step 2
-entirely and refuses the build command with a message.
+entirely and refuses the build command with a message. It also keeps graphs out of memory:
+`CoarseGraphs.configure(enabled)` is called at the end of every config load and before `start()`;
+while disabled, neither startup nor `WorldLoadEvent` loads a graph, and a reload that disables it
+stops a running build (saving its progress), saves every changed world and drops all graphs. A reload
+that enables it again loads every loaded world that has no graph.
 
 Lang keys (`walk.` section): `build-started`, `build-resumed`, `build-stopped`, `build-done`,
 `build-running` (another build is in progress), `build-no-world`, `build-disabled`.
@@ -245,7 +250,7 @@ Lang keys (`walk.` section): `build-started`, `build-resumed`, `build-stopped`, 
 | Goal area not built | Fallback for this search |
 | Coarse search over budget | Fallback, counted in stats |
 | Graph says the way is open, terrain says it is not | Fallback for this search; the next capture of that chunk corrects the graph |
-| Graph file unreadable | One warning, world runs without a graph |
+| Graph file unreadable | Moved to `<uuid>.coarse.bad`; one warning saying so; world runs without a graph |
 | Chunk fails to load during build | Logged once, skipped |
 | Build command while a build runs | `build-running` message |
 | Plugin disabled mid-build | Progress saved; resumes on the next build command |

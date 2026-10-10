@@ -42,6 +42,8 @@ import java.util.logging.Level;
 public final class CoarseGraphs implements Listener {
     private static final long SAVE_PERIOD_TICKS = 10 * 60 * 20L;
     private static final String EXTENSION = ".coarse";
+    /** An unreadable graph file is moved aside under this extension, so the next save cannot overwrite it. */
+    private static final String BAD_EXTENSION = ".coarse.bad";
     /** How long the plugin's disable waits for the last saves; a whole-world graph takes seconds to write. */
     private static final long STOP_WAIT_SECONDS = 60;
     private static final long SLOW_SAVE_NANOS = 1_000_000_000L;
@@ -65,15 +67,47 @@ public final class CoarseGraphs implements Listener {
     });
     private BukkitTask timer;
     private volatile boolean stopped;
+    private boolean started;
+    /** {@code walking-paths.coarse.enabled}: while false no graph is loaded or kept in memory. */
+    private volatile boolean enabled = true;
 
     public CoarseGraphs(JavaPlugin plugin) {
         this.plugin = plugin;
         this.directory = new File(plugin.getDataFolder(), "walk");
     }
 
+    /**
+     * Takes {@code coarse.enabled}. Call before {@link #start()} and on every reload. Disabling saves
+     * every changed world and drops all graphs from memory; enabling again loads every loaded world
+     * that has no graph.
+     */
+    public void configure(boolean enabled) {
+        boolean was = this.enabled;
+        this.enabled = enabled;
+        if (!started || was == enabled) {
+            return;
+        }
+        if (enabled) {
+            for (World world : Bukkit.getWorlds()) {
+                loadAsync(world);
+            }
+            return;
+        }
+        worlds.forEach((id, state) -> {
+            if (state.dirty) {
+                saveAsync(id);
+            }
+        });
+        // A load in flight finds its state gone and is dropped; the saves above keep their own references.
+        worlds.clear();
+    }
+
     public void start() {
-        for (World world : Bukkit.getWorlds()) {
-            loadAsync(world);
+        started = true;
+        if (enabled) {
+            for (World world : Bukkit.getWorlds()) {
+                loadAsync(world);
+            }
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
         timer = Bukkit.getScheduler().runTaskTimer(plugin, this::saveDirtyAsync, SAVE_PERIOD_TICKS, SAVE_PERIOD_TICKS);
@@ -105,7 +139,9 @@ public final class CoarseGraphs implements Listener {
 
     @EventHandler
     public void onWorldLoad(WorldLoadEvent event) {
-        loadAsync(event.getWorld());
+        if (enabled) {
+            loadAsync(event.getWorld());
+        }
     }
 
     /** Any thread. Null until loaded, or when the world has no file and nothing was captured yet. */
@@ -223,7 +259,8 @@ public final class CoarseGraphs implements Listener {
             try {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     state.loading = false;
-                    if (loaded != null) {
+                    // Disabled meanwhile: configure(false) dropped this state, and the graph with it.
+                    if (loaded != null && worlds.get(id) == state) {
                         state.graph = loaded.graph();
                         state.progress = loaded.progress();
                         state.dirty = false;
@@ -244,9 +281,20 @@ public final class CoarseGraphs implements Listener {
             }
             return loaded;
         } catch (IOException | RuntimeException e) {
-            plugin.getLogger().warning("Could not read coarse graph " + file + ": " + e
-                    + "; the world runs without a graph until it is rebuilt");
+            plugin.getLogger().warning("Could not read coarse graph " + file + ": " + e + "; "
+                    + moveAside(world, file) + "; the world runs without a graph until it is rebuilt");
             return null;
+        }
+    }
+
+    /** Save thread. Moves an unreadable file out of the way of the next save; says what happened. */
+    private String moveAside(UUID world, Path file) {
+        Path bad = new File(directory, world + BAD_EXTENSION).toPath();
+        try {
+            Files.move(file, bad, StandardCopyOption.REPLACE_EXISTING);
+            return "moved it to " + bad.getFileName();
+        } catch (IOException e) {
+            return "could not move it aside (" + e + "), so the next save will replace it";
         }
     }
 

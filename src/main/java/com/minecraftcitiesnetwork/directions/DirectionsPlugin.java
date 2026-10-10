@@ -30,9 +30,9 @@ public class DirectionsPlugin extends JavaPlugin {
         this.lang = new LangService(this);
         this.lang.load();
         this.coarseGraphs = new CoarseGraphs(this);
-        this.coarseGraphs.start();
         this.coarseBuilder = new CoarseBuilder(this, coarseGraphs, lang);
         reloadDirectionsData();
+        this.coarseGraphs.start();
         this.navigationService = new NavigationService(this);
         this.navigationService.start();
 
@@ -74,6 +74,7 @@ public class DirectionsPlugin extends JavaPlugin {
             navigationService.dropGuides();
         }
         coarseBuilder.configure(loadedData.walk());
+        coarseGraphs.configure(loadedData.walk().coarse().enabled());
         getLogger().info("Loaded " + loadedData.stopsById().size() + " stops and " + loadedData.lines().size() + " lines.");
     }
 
