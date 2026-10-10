@@ -63,13 +63,19 @@ walk/
 ```
 
 - **`ChunkComponents`**: `of(Terrain, chunkX, chunkZ, WalkRules) → List<Component>`. Floods the
-  chunk's surface cells with the real walking rules restricted to the chunk's own columns. Each
+  chunk's surface cells over the moves the real walking rules allow inside the chunk's own columns,
+  connected over the undirected move graph: two cells are connected when a legal move exists from
+  either one to the other (the adjacency is built once per chunk, each move added both ways). So
+  components partition the chunk's cells and no two share a representative; a ledge reachable only
+  by a drop belongs with the ground below it. The window search still walks the real directed rules,
+  so a coarse path through a one-way drop that cannot be walked falls back. Each
   component records its representative cell (the walkable cell nearest the chunk centre, lowest cell
   key on ties), its height range, and its border cells by side. Also `componentOf(Terrain, chunkX,
   chunkZ, cell, WalkRules) → ComponentId or null`: the component a cell belongs to, by flooding
   from that cell until the representative is found.
 - **`CoarseNode`**: `id`, `minY`, `maxY`, and `edges`: the ids of connected nodes in the four
-  neighbouring chunks. Immutable; a changed chunk replaces its nodes.
+  neighbouring chunks, sorted and without repeats. Immutable; a changed chunk replaces its nodes.
+  `ChunkEdges` links two nodes when a legal move crosses the border in either direction.
 - **`CoarseGraph`**: `nodesOf(chunkX, chunkZ)`, `node(ComponentId)`, `replace(chunkX, chunkZ,
   List<CoarseNode>)`, `size()`. Replacing a chunk's nodes also rewrites the matching edges of its
   neighbours, so edges are always symmetric. A `ConcurrentHashMap` keyed by chunk; `replace` is
@@ -163,8 +169,9 @@ chunks in flight finish. Only one build runs at a time.
    left, and the graph's node count. Start, resume, stop, done and "no such world" are reported to
    the command sender through lang keys.
 
-A reload keeps the build running; it only re-reads `build-chunks-per-tick`. Disabling the plugin
-saves and stops it.
+A reload keeps the build running; it only re-reads `build-chunks-per-tick`. A reload that disables
+coarse routing (`coarse.enabled: false`) also stops a running build, saving its progress. Disabling
+the plugin saves and stops it.
 
 Reveille (measured): 259,968 existing chunks in 521 region files, about an hour at 4 chunks per tick.
 Measured again on 2026-10-10 on the dev copy: 50 minutes at about 80 chunks per second; of the
@@ -185,6 +192,9 @@ Searches use a world's graph only once a build of it has finished
 (`CoarseGraphs.graphForPlanning(world)`, null unless the saved progress is `done`): before that,
 unbuilt chunks would read as impassable and a coarse search would spend its whole budget proving
 there is no path. A world being rebuilt is routed without its graph until the rebuild finishes.
+Components and edges are connected over the undirected move graph (§3): the window search still
+walks the real directed rules, so a coarse path through a one-way drop that cannot be walked falls
+back for that search.
 Edges on a side whose neighbour is not captured keep whatever the graph already has for that side
 (the neighbour's own edges to this chunk are rewritten only on the sides recomputed). So:
 
@@ -205,12 +215,12 @@ components from a supplier for this. The builder uses its own cache the same way
 One file per world: `plugins/Directions/walk/<world UUID>.coarse`, gzip-compressed, big-endian (Java `DataOutput`):
 
 ```
-magic "DCG1", version 1
+magic "DCG1", version 2
 world UUID (two longs)
 progress: region x, region z, row (ints; −1, −1, −1 when no build has started), done flag
 node count (int)
 per node: chunk x, chunk z (ints); representative x, y, z (ints); minY, maxY (shorts);
-          edge count (byte); per edge: chunk x, chunk z, representative x, y, z (ints)
+          edge count (unsigned short, at most 65,535); per edge: chunk x, chunk z, representative x, y, z (ints)
 empty-chunk count (int); per empty chunk: chunk x, chunk z (ints)
 ```
 
@@ -227,9 +237,11 @@ whole Reveille graph projects to about 210 MB (the server's class histogram show
 `CoarseNode` and 66 MB of `ComponentId` for 2.07 million nodes). That is under the 300 MB line, so
 the node layout is not packed further. Written to a temporary file and renamed into place, never partially. Loaded
 asynchronously on plugin enable; searches run without the graph until it is in memory. A file that
-fails to read (bad magic, truncated, newer version, another world's file) is moved to
+fails to read (bad magic, truncated, another version, another world's file) is moved to
 `<world UUID>.coarse.bad` (replacing an older one), so the next save cannot overwrite it; one warning
-names the file and says where it went, and the world runs without a graph until rebuilt.
+names the file and says where it went, and the world runs without a graph until rebuilt. A version 1
+file (byte edge counts, built before components were undirected) is refused this way; the error says
+to rebuild with `/directions walk build`.
 
 Saved: on build progress, on `/directions walk build stop`, on plugin disable, and otherwise every ten
 minutes if the graph changed.

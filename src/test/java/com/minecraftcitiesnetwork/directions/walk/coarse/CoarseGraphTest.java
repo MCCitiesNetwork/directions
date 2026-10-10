@@ -164,6 +164,12 @@ class CoarseGraphTest {
     }
 
     @Test
+    void nodeEdgesAreSortedAndDeduplicated() {
+        CoarseNode n = new CoarseNode(id(0, 0), 60, 70, List.of(id(1, 0), id(0, 1), id(1, 0), id(0, 1), id(1, 0)));
+        assertEquals(List.of(id(0, 1), id(1, 0)), n.edges());
+    }
+
+    @Test
     void chunkKeysRoundTripNegatives() {
         long key = ChunkKeys.key(-5, 7);
         assertEquals(-5, ChunkKeys.x(key));

@@ -15,21 +15,27 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Splits a chunk's walkable cells into connected components, flooding only inside the chunk. */
+/**
+ * Splits a chunk's walkable cells into connected components, flooding only inside the chunk. Two cells
+ * are connected when a legal move exists from either one to the other: the flood runs over the
+ * undirected move graph, so components partition the chunk's cells and no two share a representative.
+ * The window search still walks the real, directed rules, so a coarse path through a one-way drop
+ * that cannot be walked falls back.
+ */
 public final class ChunkComponents {
     private ChunkComponents() {
     }
 
     /** Components in ascending order of representative key; throws if a column of the chunk is unknown. */
     public static List<Component> of(Terrain terrain, int chunkX, int chunkZ, WalkRules rules) {
-        Map<Long, Integer> surfaces = surfacesOf(terrain, chunkX, chunkZ);
+        Map<Long, List<Long>> moves = moves(terrain, chunkX, chunkZ, rules);
         List<Component> components = new ArrayList<>();
         Set<Long> seen = new HashSet<>();
-        for (long start : surfaces.keySet()) {
+        for (long start : moves.keySet()) {
             if (seen.contains(start)) {
                 continue;
             }
-            List<Cell> cells = flood(terrain, chunkX, chunkZ, rules, surfaces, start);
+            List<Cell> cells = flood(moves, start);
             for (Cell cell : cells) {
                 seen.add(Cell.key(cell.x(), cell.y(), cell.z()));
             }
@@ -42,25 +48,53 @@ public final class ChunkComponents {
     /** The component holding the given cell, or null when it is not a surface cell of that chunk. */
     public static ComponentId componentOf(Terrain terrain, int chunkX, int chunkZ, int x, int y, int z,
                                           WalkRules rules) {
-        Map<Long, Integer> surfaces = surfacesOf(terrain, chunkX, chunkZ);
+        Map<Long, List<Long>> moves = moves(terrain, chunkX, chunkZ, rules);
         long key = Cell.key(x, y, z);
-        if (!surfaces.containsKey(key)) {
+        if (!moves.containsKey(key)) {
             return null;
         }
-        return describe(chunkX, chunkZ, flood(terrain, chunkX, chunkZ, rules, surfaces, key)).id();
+        return describe(chunkX, chunkZ, flood(moves, key)).id();
     }
 
     /** Every cell key of the component; empty when the id is not a surface cell of its chunk. */
     public static Set<Long> cellsOf(Terrain terrain, ComponentId id, WalkRules rules) {
-        Map<Long, Integer> surfaces = surfacesOf(terrain, id.chunkX(), id.chunkZ());
+        Map<Long, List<Long>> moves = moves(terrain, id.chunkX(), id.chunkZ(), rules);
         long start = Cell.key(id.x(), id.y(), id.z());
         Set<Long> keys = new HashSet<>();
-        if (surfaces.containsKey(start)) {
-            for (Cell cell : flood(terrain, id.chunkX(), id.chunkZ(), rules, surfaces, start)) {
+        if (moves.containsKey(start)) {
+            for (Cell cell : flood(moves, start)) {
                 keys.add(Cell.key(cell.x(), cell.y(), cell.z()));
             }
         }
         return keys;
+    }
+
+    /**
+     * Every surface cell of the chunk with the cells it is connected to by a legal move inside the
+     * chunk, in either direction: each move is recorded both ways.
+     */
+    private static Map<Long, List<Long>> moves(Terrain terrain, int chunkX, int chunkZ, WalkRules rules) {
+        Map<Long, Integer> surfaces = surfacesOf(terrain, chunkX, chunkZ);
+        Map<Long, List<Long>> moves = new HashMap<>();
+        for (long key : surfaces.keySet()) {
+            moves.put(key, new ArrayList<>());
+        }
+        for (Map.Entry<Long, Integer> entry : surfaces.entrySet()) {
+            long from = entry.getKey();
+            Cell cell = Cell.fromKey(from);
+            rules.neighbours(terrain, cell.x(), cell.z(), entry.getValue(), (nx, ny, nz, nSurface, cost) -> {
+                if ((nx >> 4) != chunkX || (nz >> 4) != chunkZ) {
+                    return;
+                }
+                long to = Cell.key(nx, ny, nz);
+                List<Long> back = moves.get(to);
+                if (back != null && to != from) {
+                    moves.get(from).add(to);
+                    back.add(from);
+                }
+            });
+        }
+        return moves;
     }
 
     private static Map<Long, Integer> surfacesOf(Terrain terrain, int chunkX, int chunkZ) {
@@ -81,27 +115,20 @@ public final class ChunkComponents {
         return surfaces;
     }
 
-    private static List<Cell> flood(Terrain terrain, int chunkX, int chunkZ, WalkRules rules,
-                                    Map<Long, Integer> surfaces, long startKey) {
+    private static List<Cell> flood(Map<Long, List<Long>> moves, long startKey) {
         List<Cell> found = new ArrayList<>();
         Set<Long> visited = new HashSet<>();
-        ArrayDeque<Cell> queue = new ArrayDeque<>();
-        Cell start = Cell.fromKey(startKey);
+        ArrayDeque<Long> queue = new ArrayDeque<>();
         visited.add(startKey);
-        queue.add(start);
+        queue.add(startKey);
         while (!queue.isEmpty()) {
-            Cell cell = queue.poll();
-            found.add(cell);
-            int surface = surfaces.get(Cell.key(cell.x(), cell.y(), cell.z()));
-            rules.neighbours(terrain, cell.x(), cell.z(), surface, (nx, ny, nz, nSurface, cost) -> {
-                if ((nx >> 4) != chunkX || (nz >> 4) != chunkZ) {
-                    return;
+            long key = queue.poll();
+            found.add(Cell.fromKey(key));
+            for (long next : moves.get(key)) {
+                if (visited.add(next)) {
+                    queue.add(next);
                 }
-                long key = Cell.key(nx, ny, nz);
-                if (surfaces.containsKey(key) && visited.add(key)) {
-                    queue.add(new Cell(nx, ny, nz));
-                }
-            });
+            }
         }
         return found;
     }

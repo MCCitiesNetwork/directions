@@ -71,9 +71,25 @@ class ChunkEdgesTest {
         BlockWorld one = new BlockWorld(0).fill(0, 64, 0, 15, 64, 15, BlockKind.SOLID)
                 .fill(16, 64, 0, 31, 65, 15, BlockKind.SOLID);
         assertEquals(1, edgeCount(link(one, 0, 0)));
+        // Too high to step up, but low enough to drop down from the east: an edge, from either side.
         BlockWorld two = new BlockWorld(0).fill(0, 64, 0, 15, 64, 15, BlockKind.SOLID)
                 .fill(16, 64, 0, 31, 66, 15, BlockKind.SOLID);
-        assertEquals(0, edgeCount(link(two, 0, 0)));
+        assertEquals(1, edgeCount(link(two, 0, 0)));
+        // Too high to drop from as well: no edge.
+        BlockWorld cliff = new BlockWorld(0).fill(0, 64, 0, 15, 64, 15, BlockKind.SOLID)
+                .fill(16, 64, 0, 31, 74, 15, BlockKind.SOLID);
+        assertEquals(0, edgeCount(link(cliff, 0, 0)));
+    }
+
+    @Test
+    void aOneWayDropAcrossTheBorderGivesAnEdgeBothWays() {
+        // Chunk 0 stands three blocks higher: the walker can drop east into chunk 1 but not climb back.
+        BlockWorld world = new BlockWorld(0).fill(0, 64, 0, 15, 67, 15, BlockKind.SOLID)
+                .fill(16, 64, 0, 31, 64, 15, BlockKind.SOLID);
+        ChunkEdges.Linked high = link(world, 0, 0);
+        ChunkEdges.Linked low = link(world, 1, 0);
+        assertEquals(List.of(low.nodes().get(0).id()), high.nodes().get(0).edges());
+        assertEquals(List.of(high.nodes().get(0).id()), low.nodes().get(0).edges());
     }
 
     @Test

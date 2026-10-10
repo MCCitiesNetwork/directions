@@ -21,7 +21,8 @@ public final class ChunkEdges {
 
     /**
      * The chunk's nodes with their edges, and the sides whose neighbour chunk was fully captured.
-     * Only those sides can have edges.
+     * Only those sides can have edges. An edge exists when a legal move crosses the border in either
+     * direction.
      */
     public record Linked(List<CoarseNode> nodes, Set<Side> sides) {
     }
@@ -58,9 +59,20 @@ public final class ChunkEdges {
                     facing.put(key, other.id());
                 }
             }
+            Map<Long, ComponentId> own = new HashMap<>();
             for (Component component : components) {
                 for (long key : component.borderCells().get(side)) {
+                    own.put(key, component.id());
                     linkFrom(terrain, rules, key, facing, edges.get(component.id()));
+                }
+            }
+            // A move into this chunk links too, so a one-way drop gives an edge both ways, as the
+            // components inside a chunk do.
+            for (Map.Entry<Long, ComponentId> entry : facing.entrySet()) {
+                Set<ComponentId> reached = new HashSet<>();
+                linkFrom(terrain, rules, entry.getKey(), own, reached);
+                for (ComponentId target : reached) {
+                    edges.get(target).add(entry.getValue());
                 }
             }
         }

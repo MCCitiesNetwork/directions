@@ -65,6 +65,51 @@ class ChunkComponentsTest {
         assertEquals(66, components.get(0).maxY());
     }
 
+    /** Floor (feet at 65) with two 3-high pillars (feet at 68): one can drop off a pillar but not climb it. */
+    private static BlockWorld pillars() {
+        return flat().fill(2, 65, 2, 3, 67, 3, BlockKind.SOLID).fill(12, 65, 12, 13, 67, 13, BlockKind.SOLID);
+    }
+
+    @Test
+    void aLedgeReachableOnlyByADropJoinsTheGroundBelow() {
+        List<Component> components = ChunkComponents.of(pillars().terrain(), 0, 0, rules);
+        assertEquals(1, components.size(), components::toString);
+        assertEquals(65, components.get(0).minY());
+        assertEquals(68, components.get(0).maxY());
+        assertEquals(components.get(0).id(), ChunkComponents.componentOf(pillars().terrain(), 0, 0, 2, 68, 2, rules));
+    }
+
+    @Test
+    void componentsPartitionTheCellsOfAMultiLevelChunk() {
+        // Pillars, a bridge too high to reach from the floor, and a one-way drop off the bridge's end.
+        BlockWorld world = pillars().fill(0, 68, 6, 15, 68, 9, BlockKind.SOLID)
+                .fill(0, 65, 10, 1, 69, 15, BlockKind.SOLID);
+        Terrain terrain = world.terrain();
+        List<Component> components = ChunkComponents.of(terrain, 0, 0, rules);
+        java.util.Set<Long> all = new java.util.HashSet<>();
+        int total = 0;
+        for (Component component : components) {
+            java.util.Set<Long> cells = ChunkComponents.cellsOf(terrain, component.id(), rules);
+            total += cells.size();
+            all.addAll(cells);
+            for (long key : cells) {
+                Cell cell = Cell.fromKey(key);
+                assertEquals(component.id(),
+                        ChunkComponents.componentOf(terrain, 0, 0, cell.x(), cell.y(), cell.z(), rules));
+            }
+        }
+        assertEquals(all.size(), total, "a cell belongs to two components");
+        int surfaces = 0;
+        for (int x = 0; x < 16; x++) {
+            for (int z = 0; z < 16; z++) {
+                surfaces += terrain.surfaces(x, z).length;
+            }
+        }
+        assertEquals(surfaces, all.size(), "every surface cell is in a component");
+        assertEquals(components.size(), components.stream().map(Component::id).distinct().count(),
+                "two components share a representative");
+    }
+
     @Test
     void emptyChunkHasNoComponents() {
         BlockWorld air = new BlockWorld(0).set(0, 64, 0, BlockKind.OPEN);

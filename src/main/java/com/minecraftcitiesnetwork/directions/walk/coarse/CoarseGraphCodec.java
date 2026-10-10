@@ -19,7 +19,9 @@ import java.util.zip.GZIPOutputStream;
 /** Reads and writes a world's graph file: gzip over big-endian {@code DataOutput}; layout in the design spec, section 7. */
 public final class CoarseGraphCodec {
     private static final byte[] MAGIC = {'D', 'C', 'G', '1'};
-    private static final int VERSION = 1;
+    /** Version 2: edge counts are unsigned shorts (version 1 had a byte, and nodes with repeated ids). */
+    private static final int VERSION = 2;
+    private static final int MAX_EDGES = 0xFFFF;
 
     public record Loaded(UUID world, CoarseGraph graph, BuildProgress progress) {
     }
@@ -75,11 +77,11 @@ public final class CoarseGraphCodec {
         data.writeInt(id.z());
         data.writeShort(node.minY());
         data.writeShort(node.maxY());
-        // A chunk has four sides of 16 cells, so a node cannot reach 128 edges; the byte would overflow if it did.
-        if (node.edges().size() > Byte.MAX_VALUE) {
-            throw new IllegalStateException("Node " + id + " has " + node.edges().size() + " edges");
+        if (node.edges().size() > MAX_EDGES) {
+            throw new IllegalStateException("Node " + id + " has " + node.edges().size() + " edges, more than "
+                    + MAX_EDGES);
         }
-        data.writeByte(node.edges().size());
+        data.writeShort(node.edges().size());
         for (ComponentId edge : node.edges()) {
             data.writeInt(edge.chunkX());
             data.writeInt(edge.chunkZ());
@@ -98,7 +100,8 @@ public final class CoarseGraphCodec {
         }
         int version = data.readInt();
         if (version != VERSION) {
-            throw new IOException("Unsupported coarse graph file version " + version + " (expected " + VERSION + ")");
+            throw new IOException("Unsupported coarse graph file version " + version + " (expected " + VERSION
+                    + "); rebuild with /directions walk build");
         }
         UUID world = new UUID(data.readLong(), data.readLong());
         BuildProgress progress = new BuildProgress(data.readInt(), data.readInt(), data.readInt(), data.readBoolean());
@@ -123,10 +126,7 @@ public final class CoarseGraphCodec {
         ComponentId id = readId(data, ids);
         int minY = data.readShort();
         int maxY = data.readShort();
-        int edgeCount = data.readByte();
-        if (edgeCount < 0) {
-            throw new IOException("Corrupt coarse graph file: negative edge count");
-        }
+        int edgeCount = data.readUnsignedShort();
         List<ComponentId> edges = new ArrayList<>(edgeCount);
         for (int i = 0; i < edgeCount; i++) {
             edges.add(readId(data, ids));

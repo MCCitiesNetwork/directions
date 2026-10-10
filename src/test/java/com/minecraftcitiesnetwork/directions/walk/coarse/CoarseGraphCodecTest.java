@@ -86,10 +86,43 @@ class CoarseGraphCodecTest {
 
     @Test
     void newerVersionIsRejected() throws IOException {
-        byte[] bytes = header("DCG1", 2);
+        byte[] bytes = header("DCG1", 3);
 
         IOException e = assertThrows(IOException.class, () -> CoarseGraphCodec.read(new ByteArrayInputStream(bytes)));
         assertTrue(e.getMessage().contains("version"));
+    }
+
+    @Test
+    void versionOneIsRejectedWithARebuildHint() throws IOException {
+        byte[] bytes = header("DCG1", 1);
+
+        IOException e = assertThrows(IOException.class, () -> CoarseGraphCodec.read(new ByteArrayInputStream(bytes)));
+        assertTrue(e.getMessage().contains("version"), e.getMessage());
+        assertTrue(e.getMessage().contains("rebuild with /directions walk build"), e.getMessage());
+    }
+
+    @Test
+    void aNodeWithMoreThan127EdgesRoundTrips() throws IOException {
+        ComponentId hub = id(0, 0, 8, 64, 8);
+        List<ComponentId> edges = new java.util.ArrayList<>();
+        for (int i = 0; i < 300; i++) {
+            edges.add(id(1, 0, 16 + i % 16, i, 8));
+        }
+        CoarseGraph graph = CoarseGraph.of(Map.of(ChunkKeys.key(0, 0), List.of(new CoarseNode(hub, 0, 300, edges))));
+        CoarseGraphCodec.Loaded loaded = CoarseGraphCodec.read(new ByteArrayInputStream(
+                write(UUID.randomUUID(), graph, BuildProgress.NONE)));
+        assertEquals(300, loaded.graph().node(hub).edges().size());
+    }
+
+    @Test
+    void moreEdgesThanAShortHoldsCannotBeWritten() {
+        List<ComponentId> edges = new java.util.ArrayList<>();
+        for (int i = 0; i < 65_536; i++) {
+            edges.add(id(1, 0, i, 64, 8));
+        }
+        CoarseGraph graph = CoarseGraph.of(Map.of(ChunkKeys.key(0, 0),
+                List.of(new CoarseNode(id(0, 0, 8, 64, 8), 64, 64, edges))));
+        assertThrows(IllegalStateException.class, () -> write(UUID.randomUUID(), graph, BuildProgress.NONE));
     }
 
     private static byte[] header(String magic, int version) throws IOException {
