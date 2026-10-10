@@ -146,16 +146,21 @@ public final class WalkSearchService {
     }
 
     private void link(CoarseGraph graph, UUID world, int chunkX, int chunkZ) {
-        Terrain terrain = store.terrain(world);
-        ChunkEdges.Linked linked;
         try {
-            List<Component> components = ChunkComponents.of(terrain, chunkX, chunkZ, rules);
-            linked = ChunkEdges.compute(terrain, rules, chunkX, chunkZ, components);
-        } catch (IllegalStateException e) {
-            return; // The chunk was evicted meanwhile; its next capture updates the graph.
+            Terrain terrain = store.terrain(world);
+            ChunkEdges.Linked linked;
+            try {
+                List<Component> components = ChunkComponents.of(terrain, chunkX, chunkZ, rules);
+                linked = ChunkEdges.compute(terrain, rules, chunkX, chunkZ, components);
+            } catch (IllegalStateException e) {
+                return; // The chunk was evicted meanwhile; its next capture updates the graph.
+            }
+            graph.replace(chunkX, chunkZ, linked.nodes(), linked.sides());
+            graphs.markDirty(world);
+        } catch (RuntimeException e) {
+            plugin.getLogger().log(Level.WARNING, "Failed to update the coarse graph for chunk "
+                    + chunkX + "," + chunkZ + " in world " + world, e);
         }
-        graph.replace(chunkX, chunkZ, linked.nodes(), linked.sides());
-        graphs.markDirty(world);
     }
 
     private void toMain(Runnable task) {

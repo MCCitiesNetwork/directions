@@ -9,6 +9,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.world.WorldLoadEvent;
+import org.bukkit.plugin.IllegalPluginAccessException;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
@@ -19,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -196,14 +198,18 @@ public final class CoarseGraphs implements Listener {
             if (stopped || !plugin.isEnabled()) {
                 return;
             }
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                state.loading = false;
-                if (loaded != null) {
-                    state.graph = loaded.graph();
-                    state.progress = loaded.progress();
-                    state.dirty = false;
-                }
-            });
+            try {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    state.loading = false;
+                    if (loaded != null) {
+                        state.graph = loaded.graph();
+                        state.progress = loaded.progress();
+                        state.dirty = false;
+                    }
+                });
+            } catch (IllegalPluginAccessException e) {
+                // Disabled between the check and the hand-off.
+            }
         });
     }
 
@@ -228,14 +234,25 @@ public final class CoarseGraphs implements Listener {
             Path target = file(world);
             Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
             try {
+                // Progress read before the nodes, so it never claims rows whose nodes the copy lacks.
+                BuildProgress progress = state.progress;
                 CoarseGraph copy = CoarseGraph.of(graph.snapshot());
                 Files.createDirectories(directory.toPath());
                 try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(tmp))) {
-                    CoarseGraphCodec.write(world, copy, state.progress, out);
+                    CoarseGraphCodec.write(world, copy, progress, out);
                 }
-                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                try {
+                    Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+                }
             } catch (IOException | RuntimeException e) {
                 state.dirty = true;
+                try {
+                    Files.deleteIfExists(tmp);
+                } catch (IOException ignored) {
+                    // The next save overwrites it.
+                }
                 plugin.getLogger().log(Level.WARNING, "Could not save coarse graph " + target, e);
             }
         }
