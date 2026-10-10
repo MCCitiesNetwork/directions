@@ -2,9 +2,10 @@ package com.minecraftcitiesnetwork.directions.walk;
 
 /**
  * @param route the route for COMPLETE and PARTIAL, otherwise null
- * @param cost  walking cost of the route
+ * @param cost   walking cost of the route
+ * @param coarse whether the route leads to a waypoint chosen with the coarse graph
  */
-public record SearchResult(Status status, Route route, double cost, int expansions, long nanos) {
+public record SearchResult(Status status, Route route, double cost, int expansions, long nanos, boolean coarse) {
     public enum Status {
         /** The route reaches the goal. */
         COMPLETE,
@@ -18,6 +19,10 @@ public record SearchResult(Status status, Route route, double cost, int expansio
         INVALID_START,
         /** The player's own column is not captured yet; try again shortly. */
         UNCAPTURED_START
+    }
+
+    public SearchResult(Status status, Route route, double cost, int expansions, long nanos) {
+        this(status, route, cost, expansions, nanos, false);
     }
 
     public boolean found() {

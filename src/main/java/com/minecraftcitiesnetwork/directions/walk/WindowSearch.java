@@ -40,10 +40,7 @@ public final class WindowSearch {
         long started = nanoClock.getAsLong();
         Start start = snap(terrain, request.x(), request.y(), request.z(), request.window());
         if (start == null) {
-            if (terrain.surfaces((int) Math.floor(request.x()), (int) Math.floor(request.z())) == null) {
-                return SearchResult.failed(SearchResult.Status.UNCAPTURED_START, 0, nanoClock.getAsLong() - started);
-            }
-            return SearchResult.failed(SearchResult.Status.INVALID_START, 0, nanoClock.getAsLong() - started);
+            return startFailure(terrain, request, started);
         }
         if (!request.goal().mayOverlap(request.window())) {
             return run(terrain, request, start, Exits.ANY, started);
@@ -54,6 +51,26 @@ public final class WindowSearch {
         }
         // The goal may lie behind terrain that is not captured yet: lead toward it instead.
         return run(terrain, request, start, Exits.UNKNOWN_ONLY, started);
+    }
+
+    /**
+     * Only the goal ends the search: no exits and no turn-back penalty. NO_ROUTE when the goal cannot
+     * be reached inside the window.
+     */
+    public SearchResult searchDirect(Terrain terrain, SearchRequest request) {
+        long started = nanoClock.getAsLong();
+        Start start = snap(terrain, request.x(), request.y(), request.z(), request.window());
+        if (start == null) {
+            return startFailure(terrain, request, started);
+        }
+        return run(terrain, request, start, Exits.NONE, started);
+    }
+
+    private SearchResult startFailure(Terrain terrain, SearchRequest request, long started) {
+        if (terrain.surfaces((int) Math.floor(request.x()), (int) Math.floor(request.z())) == null) {
+            return SearchResult.failed(SearchResult.Status.UNCAPTURED_START, 0, nanoClock.getAsLong() - started);
+        }
+        return SearchResult.failed(SearchResult.Status.INVALID_START, 0, nanoClock.getAsLong() - started);
     }
 
     private enum Exits {

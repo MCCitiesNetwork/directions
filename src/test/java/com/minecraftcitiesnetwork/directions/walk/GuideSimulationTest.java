@@ -18,6 +18,7 @@ class GuideSimulationTest {
     private static final double START_Z = 4.5;
     private static final Goal FAR_EAST = new PointGoal(1000, 64, 4, 3, false);
     private static final double SECONDS = 400;
+    private static final boolean[] MODES = {false, true};
 
     private static final City OPEN_FIELD = (x, z) -> true;
     /** Roads 8 wide every 48 blocks in both directions. */
@@ -33,46 +34,81 @@ class GuideSimulationTest {
 
     @Test
     void openFieldArrivesWithoutTurningBack() {
-        for (int window : new int[] {FULL_WINDOW, SMALL_WINDOW}) {
-            Report report = walk(OPEN_FIELD, window);
-            assertTrue(report.arrived(), "window " + window + ": " + report);
-            assertEquals(0, report.reversals(), "window " + window + ": " + report);
+        for (boolean coarse : MODES) {
+            for (int window : new int[] {FULL_WINDOW, SMALL_WINDOW}) {
+                Report report = walk(OPEN_FIELD, window, coarse);
+                String context = label(coarse) + ", window " + window + ": " + report;
+                assertTrue(report.arrived(), context);
+                assertEquals(0, report.reversals(), context);
+            }
         }
     }
 
     @Test
     void gridCityArrivesWithoutTurningBack() {
-        for (int window : new int[] {FULL_WINDOW, SMALL_WINDOW}) {
-            Report report = walk(GRID_CITY, window);
-            assertTrue(report.arrived(), "window " + window + ": " + report);
-            assertEquals(0, report.reversals(), "window " + window + ": " + report);
+        for (boolean coarse : MODES) {
+            for (int window : new int[] {FULL_WINDOW, SMALL_WINDOW}) {
+                Report report = walk(GRID_CITY, window, coarse);
+                String context = label(coarse) + ", window " + window + ": " + report;
+                assertTrue(report.arrived(), context);
+                assertEquals(0, report.reversals(), context);
+            }
         }
     }
 
     @Test
     void straightRoadInASmallWindowArrivesWithoutTurningBack() {
-        Report report = walk(STRAIGHT_ROAD, SMALL_WINDOW);
-        assertTrue(report.arrived(), report.toString());
-        assertEquals(0, report.reversals(), report.toString());
-        assertEquals(0, report.noRouteResults(), report.toString());
+        for (boolean coarse : MODES) {
+            Report report = walk(STRAIGHT_ROAD, SMALL_WINDOW, coarse);
+            String context = label(coarse) + ": " + report;
+            assertTrue(report.arrived(), context);
+            assertEquals(0, report.reversals(), context);
+            assertEquals(0, report.noRouteResults(), context);
+        }
     }
 
     @Test
     void riverBankIsFollowedWithoutBouncing() {
-        Report report = walk(RIVER_WITH_BRIDGE, FULL_WINDOW);
-        assertEquals(0, report.reversals(), report.toString());
-        assertEquals(0, report.noRouteResults(), report.toString());
+        for (boolean coarse : MODES) {
+            Report report = walk(RIVER_WITH_BRIDGE, FULL_WINDOW, coarse);
+            String context = label(coarse) + ": " + report;
+            assertEquals(0, report.reversals(), context);
+            assertEquals(0, report.noRouteResults(), context);
+        }
     }
 
     @Test
     void deadEndTurnsThePlayerBackOnceAndTakesTheBranch() {
-        Report report = walk(DEAD_END_WITH_BRANCH, FULL_WINDOW);
-        assertEquals(1, report.reversals(), report.toString());
-        assertEquals(0, report.noRouteResults(), report.toString());
+        for (boolean coarse : MODES) {
+            Report report = walk(DEAD_END_WITH_BRANCH, FULL_WINDOW, coarse);
+            String context = label(coarse) + ": " + report;
+            assertEquals(1, report.reversals(), context);
+            assertEquals(0, report.noRouteResults(), context);
+            assertTrue(report.z() >= 200, "should have reached the parallel road: " + context);
+        }
+    }
+
+    @Test
+    void withTheGraphTheRiverWalkerHeadsForTheBridge() {
+        Report report = walk(RIVER_WITH_BRIDGE, FULL_WINDOW, true);
+        assertTrue(report.arrived(), report.toString());
+        assertEquals(0, report.reversals(), report.toString());
+        assertTrue(report.minZ() >= -20, "should not have followed the bank away from the bridge: " + report);
+    }
+
+    @Test
+    void withTheGraphTheDeadEndIsNeverEntered() {
+        Report report = walk(DEAD_END_WITH_BRANCH, FULL_WINDOW, true);
+        assertEquals(0, report.reversals(), report.toString());
+        assertTrue(report.maxX() < 150, "should not have walked into the dead end: " + report);
         assertTrue(report.z() >= 200, "should have reached the parallel road: " + report);
     }
 
-    private static Report walk(City city, int window) {
-        return WalkSimulation.walk(city, window, START_X, START_Z, FAR_EAST, SECONDS);
+    private static Report walk(City city, int window, boolean coarse) {
+        return WalkSimulation.walk(city, window, START_X, START_Z, FAR_EAST, SECONDS, coarse);
+    }
+
+    private static String label(boolean coarse) {
+        return coarse ? "with the graph" : "without the graph";
     }
 }

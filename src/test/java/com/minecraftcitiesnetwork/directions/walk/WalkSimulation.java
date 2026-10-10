@@ -1,12 +1,24 @@
 package com.minecraftcitiesnetwork.directions.walk;
 
+import com.minecraftcitiesnetwork.directions.walk.coarse.ChunkComponents;
+import com.minecraftcitiesnetwork.directions.walk.coarse.ChunkEdges;
+import com.minecraftcitiesnetwork.directions.walk.coarse.ChunkKeys;
+import com.minecraftcitiesnetwork.directions.walk.coarse.CoarseGraph;
+import com.minecraftcitiesnetwork.directions.walk.coarse.CoarseNode;
+import com.minecraftcitiesnetwork.directions.walk.coarse.Component;
+import com.minecraftcitiesnetwork.directions.walk.coarse.GuidedSearch;
+
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
  * A player who follows the guide across a flat synthetic city: every column is either walkable
  * ground at one height or a building. Chunks within view distance of the player are captured;
- * the rest are unknown. Searches answer 100 ms after they are ordered, as on a server.
+ * the rest are unknown. Searches answer 100 ms after they are ordered, as on a server. In coarse
+ * mode every search goes through {@link GuidedSearch} with a graph of the whole city.
  */
 final class WalkSimulation {
     /** Which columns a player can walk on. */
@@ -19,8 +31,12 @@ final class WalkSimulation {
      * @param reversals     routes that pointed the player back along the way they were walking
      * @param noRouteResults searches that found nothing while the player had a route to follow
      * @param arrived       whether the player reached the goal within the time
+     * @param guidedRoutes  routes found that lead to a waypoint chosen with the coarse graph
+     * @param minZ          the player's smallest z over the walk
+     * @param maxX          the player's largest x over the walk
      */
-    record Report(int routes, int reversals, int noRouteResults, boolean arrived, double x, double z) {
+    record Report(int routes, int reversals, int noRouteResults, boolean arrived, double x, double z,
+                  int guidedRoutes, double minZ, double maxX) {
     }
 
     private static final int VIEW_DISTANCE_BLOCKS = 128;
@@ -32,21 +48,67 @@ final class WalkSimulation {
     private static final int[] GROUND = {Surfaces.pack(FEET_Y, Footing.GROUND, Surfaces.MAX_HEADROOM, false, false)};
     private static final int[] BUILDING = new int[0];
     private static final GuidePolicy.Tuning TUNING = new GuidePolicy.Tuning(48, 6, 2000);
+    private static final WalkRules RULES = new WalkRules(WalkerProfile.DEFAULT);
+    private static final int GRAPH_MIN_X = -200;
+    private static final int GRAPH_MAX_X = 1200;
+    private static final int GRAPH_MIN_Z = -900;
+    private static final int GRAPH_MAX_Z = 900;
+    private static final int COARSE_MAX_EXPANSIONS = 50_000;
+    /** Graphs already built, one per city; building one takes seconds. */
+    private static final Map<City, CoarseGraph> GRAPHS = new HashMap<>();
 
     private final City city;
     private final int windowRadius;
     private final Set<Long> capturedChunks = new HashSet<>();
-    private final WindowSearch search = new WindowSearch(new WalkRules(WalkerProfile.DEFAULT), System::nanoTime);
+    private final WindowSearch search = new WindowSearch(RULES, System::nanoTime);
+    private final GuidedSearch guided = new GuidedSearch(search, RULES);
     private final Terrain terrain = this::surfaces;
+    /** The city's graph in coarse mode, otherwise null. */
+    private final CoarseGraph graph;
 
     /** Walks from (startX, startZ) toward the goal for at most {@code seconds} of simulated time. */
     static Report walk(City city, int windowRadius, double startX, double startZ, Goal goal, double seconds) {
-        return new WalkSimulation(city, windowRadius).run(startX, startZ, goal, seconds);
+        return walk(city, windowRadius, startX, startZ, goal, seconds, false);
     }
 
-    private WalkSimulation(City city, int windowRadius) {
+    /** As {@link #walk(City, int, double, double, Goal, double)}, guided by the city's coarse graph when {@code coarse}. */
+    static Report walk(City city, int windowRadius, double startX, double startZ, Goal goal, double seconds,
+                       boolean coarse) {
+        return new WalkSimulation(city, windowRadius, coarse ? graphOf(city) : null).run(startX, startZ, goal, seconds);
+    }
+
+    private WalkSimulation(City city, int windowRadius, CoarseGraph graph) {
         this.city = city;
         this.windowRadius = windowRadius;
+        this.graph = graph;
+    }
+
+    private static synchronized CoarseGraph graphOf(City city) {
+        return GRAPHS.computeIfAbsent(city, WalkSimulation::buildGraph);
+    }
+
+    /**
+     * The graph of every chunk over x −200..1200, z −900..900, from the city fully known. Two passes:
+     * all nodes first, then the edges, since the graph drops edges to nodes it does not have yet.
+     */
+    private static CoarseGraph buildGraph(City city) {
+        Terrain known = (x, z) -> city.walkable(x, z) ? GROUND : BUILDING;
+        Map<Long, List<Component>> components = new HashMap<>();
+        Map<Long, List<CoarseNode>> bare = new HashMap<>();
+        for (int cx = GRAPH_MIN_X >> 4; cx <= GRAPH_MAX_X >> 4; cx++) {
+            for (int cz = GRAPH_MIN_Z >> 4; cz <= GRAPH_MAX_Z >> 4; cz++) {
+                List<Component> list = ChunkComponents.of(known, cx, cz, RULES);
+                components.put(ChunkKeys.key(cx, cz), list);
+                bare.put(ChunkKeys.key(cx, cz), list.stream()
+                        .map(c -> new CoarseNode(c.id(), c.minY(), c.maxY(), List.of())).toList());
+            }
+        }
+        CoarseGraph graph = CoarseGraph.of(bare);
+        components.forEach((key, list) -> {
+            ChunkEdges.Linked linked = ChunkEdges.compute(known, RULES, ChunkKeys.x(key), ChunkKeys.z(key), list);
+            graph.replace(ChunkKeys.x(key), ChunkKeys.z(key), linked.nodes(), linked.sides());
+        });
+        return graph;
     }
 
     private Report run(double x, double z, Goal goal, double seconds) {
@@ -54,6 +116,9 @@ final class WalkSimulation {
         int routes = 0;
         int reversals = 0;
         int noRouteResults = 0;
+        int guidedRoutes = 0;
+        double minZ = z;
+        double maxX = x;
         GuidePolicy.SearchOrder pendingOrder = null;
         SearchResult pendingResult = null;
         long resultDue = 0;
@@ -66,6 +131,9 @@ final class WalkSimulation {
                 Route after = policy.route();
                 if (pendingResult.found()) {
                     routes++;
+                    if (pendingResult.coarse()) {
+                        guidedRoutes++;
+                    }
                     double[] headingAfter = heading(after, after.nearestIndex(x, FEET_Y, z, 0));
                     if (turnsBack(headingBefore, headingAfter)) {
                         reversals++;
@@ -83,7 +151,8 @@ final class WalkSimulation {
                 SearchRequest request = new SearchRequest(x, FEET_Y, z, goal, window, order.routeEnd(),
                         200_000, Long.MAX_VALUE);
                 pendingOrder = order;
-                pendingResult = search.search(terrain, request);
+                pendingResult = graph == null ? search.search(terrain, request)
+                        : guided.search(terrain, request, graph, COARSE_MAX_EXPANSIONS);
                 resultDue = now + SEARCH_LATENCY_MILLIS;
             }
             route = policy.route();
@@ -99,11 +168,13 @@ final class WalkSimulation {
                 x += dx / distance * step;
                 z += dz / distance * step;
             }
+            minZ = Math.min(minZ, z);
+            maxX = Math.max(maxX, x);
             if (goal.contains((int) Math.floor(x), FEET_Y, (int) Math.floor(z))) {
-                return new Report(routes, reversals, noRouteResults, true, x, z);
+                return new Report(routes, reversals, noRouteResults, true, x, z, guidedRoutes, minZ, maxX);
             }
         }
-        return new Report(routes, reversals, noRouteResults, false, x, z);
+        return new Report(routes, reversals, noRouteResults, false, x, z, guidedRoutes, minZ, maxX);
     }
 
     private void captureAround(double x, double z) {

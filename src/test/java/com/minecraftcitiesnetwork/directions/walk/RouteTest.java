@@ -84,4 +84,19 @@ class RouteTest {
         assertEquals(-1, r.firstMissing(world.terrain(), 6, 40));
         assertEquals(-1, r.firstMissing((x, z) -> null, 0, 40));
     }
+
+    @Test
+    void asPartialKeepsCellsAndSetsTheEstimate() {
+        Route complete = line(0, 10);
+        Route partial = complete.asPartial(42.0);
+        assertFalse(partial.complete());
+        assertEquals(42.0, partial.endEstimate(), EPS);
+        assertEquals(complete.size(), partial.size());
+        for (int i = 0; i < complete.size(); i++) {
+            assertEquals(complete.cell(i), partial.cell(i));
+        }
+        assertEquals(complete.length(), partial.length(), EPS);
+        assertTrue(complete.complete());
+        assertEquals(0.0, complete.endEstimate(), EPS);
+    }
 }

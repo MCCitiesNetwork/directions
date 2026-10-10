@@ -54,6 +54,11 @@ public final class Route {
         return new Route(xs, ys, zs, complete, endEstimate);
     }
 
+    /** The same cells as a partial route whose goal is {@code endEstimate} beyond its end. */
+    public Route asPartial(double endEstimate) {
+        return new Route(xs, ys, zs, false, endEstimate);
+    }
+
     public int size() {
         return xs.length;
     }
