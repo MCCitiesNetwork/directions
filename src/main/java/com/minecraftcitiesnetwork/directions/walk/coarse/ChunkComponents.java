@@ -86,7 +86,7 @@ public final class ChunkComponents {
         List<Cell> found = new ArrayList<>();
         Set<Long> visited = new HashSet<>();
         ArrayDeque<Cell> queue = new ArrayDeque<>();
-        Cell start = cellOf(startKey);
+        Cell start = Cell.fromKey(startKey);
         visited.add(startKey);
         queue.add(start);
         while (!queue.isEmpty()) {
@@ -104,17 +104,6 @@ public final class ChunkComponents {
             });
         }
         return found;
-    }
-
-    private static Cell cellOf(long key) {
-        // Decode the key layout of Cell.key: x in the top 26 bits, z in the middle 26, y in the low 12.
-        int x = (int) (key >> 38);
-        x = (x << 6) >> 6;
-        int z = (int) ((key >> 12) & 0x3FFFFFF);
-        z = (z << 6) >> 6;
-        int y = (int) (key & 0xFFF);
-        y = (y << 20) >> 20;
-        return new Cell(x, y, z);
     }
 
     private static Component describe(int chunkX, int chunkZ, List<Cell> cells) {
