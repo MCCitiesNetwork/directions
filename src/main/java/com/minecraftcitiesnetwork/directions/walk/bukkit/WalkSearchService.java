@@ -11,10 +11,10 @@ import com.minecraftcitiesnetwork.directions.walk.WalkSettings;
 import com.minecraftcitiesnetwork.directions.walk.WalkStats;
 import com.minecraftcitiesnetwork.directions.walk.Window;
 import com.minecraftcitiesnetwork.directions.walk.WindowSearch;
-import com.minecraftcitiesnetwork.directions.walk.coarse.ChunkComponents;
 import com.minecraftcitiesnetwork.directions.walk.coarse.ChunkEdges;
 import com.minecraftcitiesnetwork.directions.walk.coarse.CoarseGraph;
 import com.minecraftcitiesnetwork.directions.walk.coarse.Component;
+import com.minecraftcitiesnetwork.directions.walk.coarse.ComponentCache;
 import com.minecraftcitiesnetwork.directions.walk.coarse.GuidedSearch;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
@@ -22,8 +22,10 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -41,6 +43,10 @@ public final class WalkSearchService {
     private final WalkSettings settings;
     private final CoarseGraphs graphs;
     private final ExecutorService executor;
+    /** Live graph updates, apart from the search threads and below them in priority. */
+    private final ExecutorService linkExecutor;
+    /** Per world: components of recently linked chunks, so a neighbour is not flooded once per side. */
+    private final Map<UUID, ComponentCache> componentCaches = new ConcurrentHashMap<>();
     private final WalkStats stats = new WalkStats(System::currentTimeMillis);
     private final ColumnStore store;
     private final ChunkColumnCache cache;
@@ -57,6 +63,12 @@ public final class WalkSearchService {
         this.executor = Executors.newFixedThreadPool(THREADS, r -> {
             Thread t = new Thread(r, "Directions-Walk-" + threadNumber.incrementAndGet());
             t.setDaemon(true);
+            return t;
+        });
+        this.linkExecutor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "Directions-CoarseLink");
+            t.setDaemon(true);
+            t.setPriority(Thread.MIN_PRIORITY);
             return t;
         });
         this.store = new ColumnStore(settings.cacheMaxChunks(), System::currentTimeMillis);
@@ -78,6 +90,7 @@ public final class WalkSearchService {
         HandlerList.unregisterAll(listener);
         cache.stop();
         executor.shutdownNow();
+        linkExecutor.shutdownNow();
     }
 
     public WalkSettings settings() {
@@ -147,24 +160,29 @@ public final class WalkSearchService {
         if (!running || !settings.coarse().enabled()) {
             return;
         }
+        ComponentCache components = componentCaches.computeIfAbsent(world, id -> new ComponentCache());
+        // Even without a graph: the chunk's terrain is new, so its cached components are stale.
+        components.invalidate(chunkX, chunkZ);
         CoarseGraph graph = graphs.graph(world);
         if (graph == null) {
             return;
         }
         try {
-            executor.execute(() -> link(graph, world, chunkX, chunkZ));
+            linkExecutor.execute(() -> link(graph, components, world, chunkX, chunkZ));
         } catch (RejectedExecutionException e) {
             // Shutting down.
         }
     }
 
-    private void link(CoarseGraph graph, UUID world, int chunkX, int chunkZ) {
+    /** Link thread. */
+    private void link(CoarseGraph graph, ComponentCache cache, UUID world, int chunkX, int chunkZ) {
         try {
             Terrain terrain = store.terrain(world);
             ChunkEdges.Linked linked;
             try {
-                List<Component> components = ChunkComponents.of(terrain, chunkX, chunkZ, rules);
-                linked = ChunkEdges.compute(terrain, rules, chunkX, chunkZ, components);
+                List<Component> components = cache.of(terrain, chunkX, chunkZ, rules);
+                linked = ChunkEdges.compute(terrain, rules, chunkX, chunkZ, components,
+                        (x, z) -> cache.of(terrain, x, z, rules));
             } catch (IllegalStateException e) {
                 return; // The chunk was evicted meanwhile; its next capture updates the graph.
             }

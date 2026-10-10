@@ -53,6 +53,7 @@ walk/
 │   ├── RegionHeaders            which chunks exist in a region file, from its 4 KB header table
 │   ├── Waypoints                picks the window search's goal from a node path and a window
 │   ├── GuidedSearch             composes the coarse plan with the window search; used by the service and the simulation
+│   ├── ComponentCache           an LRU of recently linked chunks' components, so neighbours are not flooded again
 │   ├── BuildOrder               pure build helper: which chunks of a region are still to do, in build order
 │   └── BuildRows                pure build helper: which rows of a build are complete, so saved progress skips no gap
 ├── bukkit/
@@ -184,7 +185,13 @@ Edges on a side whose neighbour is not captured keep whatever the graph already 
   window re-captures the chunk;
 - a chunk unloading does not remove its nodes; the graph is the memory of what was last seen.
 
-Components are computed on the pool thread; `replace` is quick and synchronised.
+Components and edges are computed on a dedicated single link thread (`Directions-CoarseLink`, minimum
+priority, owned by `WalkSearchService`), never on the two search threads, so a first window of a
+hundred-odd city chunks does not queue ahead of the player's first search; `replace` is quick and
+synchronised. A per-world `ComponentCache` (pure, in `walk/coarse`: an LRU of 512 chunks' components,
+`invalidate(cx, cz)` called for every re-captured chunk) lets linking a chunk reuse its neighbours'
+components instead of flooding each neighbour again; `ChunkEdges.compute` takes the neighbour
+components from a supplier for this. The builder uses its own cache the same way.
 
 ## 7. Persistence
 
@@ -246,7 +253,8 @@ Lang keys (`walk.` section): `build-started`, `build-resumed`, `build-stopped`, 
 ## 10. Threading
 
 - Main thread: command handling, snapshots, `getChunkAtAsync` callbacks, saving triggers.
-- Decode pool: decoding, components, edges, `replace`.
+- Decode pool: decoding. Live captures then hand components, edges and `replace` to the link thread;
+  the builder does all of it on its own builder thread.
 - Any thread: `CoarseGraph` reads (searches on the pool).
 - Saving: a copy of the node map is taken under the replace lock, then written on a separate
   single-threaded executor so a save never blocks decoding.

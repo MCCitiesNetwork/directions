@@ -10,12 +10,12 @@ import com.minecraftcitiesnetwork.directions.walk.WalkSettings;
 import com.minecraftcitiesnetwork.directions.walk.coarse.BuildOrder;
 import com.minecraftcitiesnetwork.directions.walk.coarse.BuildProgress;
 import com.minecraftcitiesnetwork.directions.walk.coarse.BuildRows;
-import com.minecraftcitiesnetwork.directions.walk.coarse.ChunkComponents;
 import com.minecraftcitiesnetwork.directions.walk.coarse.ChunkEdges;
 import com.minecraftcitiesnetwork.directions.walk.coarse.ChunkKeys;
 import com.minecraftcitiesnetwork.directions.walk.coarse.ChunkPos;
 import com.minecraftcitiesnetwork.directions.walk.coarse.CoarseGraph;
 import com.minecraftcitiesnetwork.directions.walk.coarse.Component;
+import com.minecraftcitiesnetwork.directions.walk.coarse.ComponentCache;
 import com.minecraftcitiesnetwork.directions.walk.coarse.RegionHeaders;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -278,6 +278,8 @@ public final class CoarseBuilder {
          * where the earlier build stopped.
          */
         final ArrayDeque<ChunkPos> warmUp = new ArrayDeque<>();
+        /** Builder thread only: components of recently built chunks, so a neighbour is not flooded once per side. */
+        final ComponentCache components = new ComponentCache();
         /** Builder thread only: decoded chunks, so each chunk can be linked to the neighbours built before it. */
         final ColumnStore store = new ColumnStore(BUILD_STORE_CHUNKS, System::currentTimeMillis);
         /**
@@ -433,6 +435,7 @@ public final class CoarseBuilder {
             try {
                 ColumnChunk decoded = ColumnDecoder.decode(chunk.x(), chunk.z(), new SnapshotBlocks(snapshot, kinds, minY, maxY));
                 store.put(worldId, decoded);
+                components.invalidate(chunk.x(), chunk.z());
                 keepEastColumn(decoded);
             } catch (RuntimeException e) {
                 logBuildFailure(chunk, e);
@@ -450,8 +453,10 @@ public final class CoarseBuilder {
                 keepEastColumn(decoded);
                 restoreWestNeighbour(x, z);
                 Terrain terrain = store.terrain(worldId);
-                List<Component> components = ChunkComponents.of(terrain, x, z, buildRules);
-                ChunkEdges.Linked linked = ChunkEdges.compute(terrain, buildRules, x, z, components);
+                this.components.invalidate(x, z);
+                List<Component> components = this.components.of(terrain, x, z, buildRules);
+                ChunkEdges.Linked linked = ChunkEdges.compute(terrain, buildRules, x, z, components,
+                        (nx, nz) -> this.components.of(terrain, nx, nz, buildRules));
                 graph.replace(x, z, linked.nodes(), linked.sides());
                 graphs.markDirty(worldId);
                 built = true;

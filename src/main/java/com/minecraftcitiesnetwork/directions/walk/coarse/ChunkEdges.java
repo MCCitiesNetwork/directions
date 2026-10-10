@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 /** Links the components of a chunk to those of the four chunks beside it. */
 public final class ChunkEdges {
@@ -27,6 +28,18 @@ public final class ChunkEdges {
 
     public static Linked compute(Terrain terrain, WalkRules rules, int chunkX, int chunkZ,
                                  List<Component> components) {
+        return compute(terrain, rules, chunkX, chunkZ, components,
+                (x, z) -> ChunkComponents.of(terrain, x, z, rules));
+    }
+
+    /**
+     * As {@link #compute(Terrain, WalkRules, int, int, List)}, taking a fully captured neighbour's
+     * components from {@code neighbourComponents} (a {@link ComponentCache}, say) instead of
+     * flooding the neighbour again.
+     */
+    public static Linked compute(Terrain terrain, WalkRules rules, int chunkX, int chunkZ,
+                                 List<Component> components,
+                                 BiFunction<Integer, Integer, List<Component>> neighbourComponents) {
         Map<ComponentId, Set<ComponentId>> edges = new HashMap<>();
         for (Component component : components) {
             edges.put(component.id(), new HashSet<>());
@@ -40,7 +53,7 @@ public final class ChunkEdges {
             }
             sides.add(side);
             Map<Long, ComponentId> facing = new HashMap<>();
-            for (Component other : ChunkComponents.of(terrain, neighbourX, neighbourZ, rules)) {
+            for (Component other : neighbourComponents.apply(neighbourX, neighbourZ)) {
                 for (long key : other.borderCells().get(side.opposite())) {
                     facing.put(key, other.id());
                 }
