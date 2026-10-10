@@ -40,6 +40,9 @@ class GuideSimulationTest {
             for (int window : new int[] {FULL_WINDOW, SMALL_WINDOW}) {
                 Report report = walk(OPEN_FIELD, window, coarse);
                 String context = label(coarse) + ", window " + window + ": " + report;
+                if (coarse) {
+                    assertTrue(report.guidedRoutes() > 0, context);
+                }
                 assertTrue(report.arrived(), context);
                 assertEquals(0, report.reversals(), context);
             }
@@ -52,6 +55,9 @@ class GuideSimulationTest {
             for (int window : new int[] {FULL_WINDOW, SMALL_WINDOW}) {
                 Report report = walk(GRID_CITY, window, coarse);
                 String context = label(coarse) + ", window " + window + ": " + report;
+                if (coarse) {
+                    assertTrue(report.guidedRoutes() > 0, context);
+                }
                 assertTrue(report.arrived(), context);
                 assertEquals(0, report.reversals(), context);
             }
@@ -63,6 +69,9 @@ class GuideSimulationTest {
         for (boolean coarse : MODES) {
             Report report = walk(STRAIGHT_ROAD, SMALL_WINDOW, coarse);
             String context = label(coarse) + ": " + report;
+            if (coarse) {
+                assertTrue(report.guidedRoutes() > 0, context);
+            }
             assertTrue(report.arrived(), context);
             assertEquals(0, report.reversals(), context);
             assertEquals(0, report.noRouteResults(), context);
@@ -74,6 +83,9 @@ class GuideSimulationTest {
         for (boolean coarse : MODES) {
             Report report = walk(RIVER_WITH_BRIDGE, FULL_WINDOW, coarse);
             String context = label(coarse) + ": " + report;
+            if (coarse) {
+                assertTrue(report.guidedRoutes() > 0, context);
+            }
             assertEquals(0, report.reversals(), context);
             assertEquals(0, report.noRouteResults(), context);
         }
@@ -96,6 +108,7 @@ class GuideSimulationTest {
         Report report = walk(RIVER_WITH_BRIDGE, FULL_WINDOW, true);
         assertTrue(report.arrived(), report.toString());
         assertEquals(0, report.reversals(), report.toString());
+        assertTrue(report.guidedRoutes() > 0, report.toString());
         double minZ = report.trail().stream().mapToDouble(p -> p[1]).min().orElseThrow();
         assertTrue(minZ >= -20, "should not have followed the bank away from the bridge, min z " + minZ + ": " + report);
     }
@@ -106,9 +119,10 @@ class GuideSimulationTest {
                 SECONDS, true);
         assertTrue(report.arrived(), report.toString());
         assertEquals(0, report.reversals(), report.toString());
+        assertTrue(report.guidedRoutes() > 0, report.toString());
         double maxXOnFirstRoad = report.trail().stream().filter(p -> p[1] < 100).mapToDouble(p -> p[0]).max()
                 .orElseThrow();
-        assertTrue(maxXOnFirstRoad < 150,
+        assertTrue(maxXOnFirstRoad < 50,
                 "should not have walked into the dead end, max x " + maxXOnFirstRoad + ": " + report);
     }
 

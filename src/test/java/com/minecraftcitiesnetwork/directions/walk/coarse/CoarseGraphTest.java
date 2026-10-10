@@ -1,12 +1,14 @@
 package com.minecraftcitiesnetwork.directions.walk.coarse;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -128,5 +130,12 @@ class CoarseGraphTest {
         key = ChunkKeys.key(3, -9);
         assertEquals(3, ChunkKeys.x(key));
         assertEquals(-9, ChunkKeys.z(key));
+    }
+
+    @Test
+    void isEmptyOnlyWithoutAnyNode() {
+        assertTrue(new CoarseGraph().isEmpty());
+        assertTrue(CoarseGraph.of(Map.of(ChunkKeys.key(0, 0), List.of())).isEmpty());
+        assertFalse(CoarseGraph.of(Map.of(ChunkKeys.key(0, 0), List.of(node(id(0, 0))))).isEmpty());
     }
 }

@@ -25,7 +25,7 @@ public final class GuidedSearch {
      *              the window search's own
      */
     public SearchResult search(Terrain terrain, SearchRequest request, CoarseGraph graph, int coarseMaxExpansions) {
-        if (graph == null || graph.size() == 0) {
+        if (graph == null || graph.isEmpty()) {
             return window.search(terrain, request);
         }
         if (request.goal().mayOverlap(request.window())) {

@@ -42,6 +42,16 @@ public final class CoarseGraph {
         return total;
     }
 
+    /** Whether the graph has no node at all; stops at the first chunk that has one. */
+    public boolean isEmpty() {
+        for (List<CoarseNode> nodes : chunks.values()) {
+            if (!nodes.isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public int chunkCount() {
         return chunks.size();
     }
