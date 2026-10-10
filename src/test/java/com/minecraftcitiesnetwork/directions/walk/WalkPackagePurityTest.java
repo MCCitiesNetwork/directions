@@ -11,18 +11,19 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The walking core must stay testable without a server: no Bukkit, Paper or WorldGuard imports. */
+/** The walking core (everything under walk/ except the bukkit adapter package) must stay testable without a server: no Bukkit, Paper or WorldGuard imports. */
 class WalkPackagePurityTest {
     private static final List<String> FORBIDDEN = List.of("import org.bukkit", "import io.papermc", "import com.sk89q");
 
     @Test
     void corePackageHasNoServerImports() throws IOException {
         Path dir = Path.of("src/main/java/com/minecraftcitiesnetwork/directions/walk");
-        try (Stream<Path> files = Files.list(dir)) {
+        try (Stream<Path> files = Files.walk(dir)) {
             List<String> offenders = files
                     .filter(p -> p.toString().endsWith(".java"))
+                    .filter(p -> !dir.relativize(p).startsWith("bukkit"))
                     .filter(WalkPackagePurityTest::importsServerApi)
-                    .map(p -> p.getFileName().toString())
+                    .map(p -> dir.relativize(p).toString())
                     .toList();
             assertTrue(offenders.isEmpty(), "server imports in walk/: " + offenders);
         }

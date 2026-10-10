@@ -1,11 +1,11 @@
 package com.minecraftcitiesnetwork.directions.walk;
 
 /** One-character block codes for test worlds. */
-final class Kinds {
+public final class Kinds {
     private Kinds() {
     }
 
-    static BlockKind of(char c) {
+    public static BlockKind of(char c) {
         return switch (c) {
             case 'S' -> BlockKind.SOLID;
             case 'H' -> BlockKind.HALF;

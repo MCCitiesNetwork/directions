@@ -6,13 +6,13 @@ import java.util.Map;
 import java.util.Set;
 
 /** A sparse block world for tests: set block kinds, then decode it into a {@link Terrain}. */
-final class BlockWorld {
+public final class BlockWorld {
     private final int minY;
     private final Map<Long, BlockKind> blocks = new HashMap<>();
     private final Set<Long> chunks = new HashSet<>();
     private int topY;
 
-    BlockWorld(int minY) {
+    public BlockWorld(int minY) {
         this.minY = minY;
         this.topY = minY;
     }
@@ -21,7 +21,7 @@ final class BlockWorld {
      * Layers bottom-up, the first at {@code minY}. In each layer, rows are z (from 0) and characters
      * are x (from 0), using the codes in {@link Kinds}.
      */
-    static BlockWorld layers(int minY, String... layers) {
+    public static BlockWorld layers(int minY, String... layers) {
         BlockWorld world = new BlockWorld(minY);
         for (int i = 0; i < layers.length; i++) {
             String[] rows = layers[i].strip().split("\n");
@@ -36,7 +36,7 @@ final class BlockWorld {
     }
 
     /** A single column at x = 0, z = 0, written bottom-up from {@code minY}. */
-    static BlockWorld column(int minY, String bottomUp) {
+    public static BlockWorld column(int minY, String bottomUp) {
         BlockWorld world = new BlockWorld(minY);
         for (int i = 0; i < bottomUp.length(); i++) {
             world.set(0, minY + i, 0, Kinds.of(bottomUp.charAt(i)));
@@ -44,7 +44,7 @@ final class BlockWorld {
         return world;
     }
 
-    BlockWorld set(int x, int y, int z, BlockKind kind) {
+    public BlockWorld set(int x, int y, int z, BlockKind kind) {
         if (y < minY) {
             throw new IllegalArgumentException("y " + y + " is below minY " + minY);
         }
@@ -54,7 +54,7 @@ final class BlockWorld {
         return this;
     }
 
-    BlockWorld fill(int x0, int y0, int z0, int x1, int y1, int z1, BlockKind kind) {
+    public BlockWorld fill(int x0, int y0, int z0, int x1, int y1, int z1, BlockKind kind) {
         for (int x = Math.min(x0, x1); x <= Math.max(x0, x1); x++) {
             for (int y = Math.min(y0, y1); y <= Math.max(y0, y1); y++) {
                 for (int z = Math.min(z0, z1); z <= Math.max(z0, z1); z++) {
@@ -66,7 +66,7 @@ final class BlockWorld {
     }
 
     /** Decodes every chunk that has at least one block set; columns of other chunks are unknown. */
-    Terrain terrain() {
+    public Terrain terrain() {
         Map<Long, ColumnChunk> decoded = new HashMap<>();
         for (long ck : chunks) {
             int cx = (int) (ck >> 32);
