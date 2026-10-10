@@ -31,8 +31,14 @@ public final class CoarsePlanner {
     /** A plan toward {@code goal}, or null when the coarse graph cannot give one. */
     public static Plan plan(CoarseGraph graph, Terrain terrain, WalkRules rules, WindowSearch.Start start,
                             Goal goal, Window window, int maxExpansions) {
-        ComponentId startId = ChunkComponents.componentOf(terrain, start.x() >> 4, start.z() >> 4,
-                start.x(), start.y(), start.z(), rules);
+        ComponentId startId;
+        try {
+            startId = ChunkComponents.componentOf(terrain, start.x() >> 4, start.z() >> 4,
+                    start.x(), start.y(), start.z(), rules);
+        } catch (IllegalStateException evicted) {
+            // A column of the start chunk was evicted from the column store.
+            return null;
+        }
         if (startId == null) {
             return null;
         }
@@ -48,7 +54,13 @@ public final class CoarsePlanner {
         if (waypoint == null) {
             return null;
         }
-        Set<Long> cells = ChunkComponents.cellsOf(terrain, waypoint, rules);
+        Set<Long> cells;
+        try {
+            cells = ChunkComponents.cellsOf(terrain, waypoint, rules);
+        } catch (IllegalStateException evicted) {
+            // Waypoints.pick checks only the representative column; another column may be gone.
+            return null;
+        }
         if (cells.isEmpty()) {
             // The terrain changed since the graph was built: the representative is no longer a surface.
             return null;

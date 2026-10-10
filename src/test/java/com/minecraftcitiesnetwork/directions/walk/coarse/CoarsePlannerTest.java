@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.IntPredicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -91,6 +92,8 @@ class CoarsePlannerTest {
         assertTrue(WINDOW.contains(waypoint.chunkX() * 16 + 15, waypoint.chunkZ() * 16 + 15));
         // Chunk 4 is the last chunk column fully inside the window (x -72..88).
         assertEquals(4, waypoint.chunkX());
+        // The search's tie-break keeps to row 1 until the window edge; pinned to catch a regression.
+        assertEquals(1, waypoint.chunkZ());
         assertTrue(plan.goal().contains(waypoint.x(), waypoint.y(), waypoint.z()));
         assertFalse(plan.goal().contains(START_X, 65, START_Z));
     }
@@ -123,6 +126,32 @@ class CoarsePlannerTest {
         assertNull(CoarsePlanner.plan(withoutStart, NEAR_START, RULES, START, GOAL, WINDOW, 10_000));
         WindowSearch.Start inTheAir = new WindowSearch.Start(START_X, 80, START_Z, START.surface());
         assertNull(CoarsePlanner.plan(FULL_GRAPH, NEAR_START, RULES, inTheAir, GOAL, WINDOW, 10_000));
+    }
+
+    @Test
+    void evictedColumnInTheWaypointChunkGivesNoPlan() {
+        // Representative columns stay known; the east edge column of chunk column 4 is evicted.
+        Terrain evicted = (x, z) -> x == 79 ? null : NEAR_START.surfaces(x, z);
+        assertNull(CoarsePlanner.plan(FULL_GRAPH, evicted, RULES, START, GOAL, WINDOW, 10_000));
+    }
+
+    @Test
+    void evictedColumnInTheStartChunkGivesNoPlan() {
+        Terrain evicted = (x, z) -> x == 0 && z == 16 ? null : NEAR_START.surfaces(x, z);
+        assertNull(CoarsePlanner.plan(FULL_GRAPH, evicted, RULES, START, GOAL, WINDOW, 10_000));
+    }
+
+    @Test
+    void goalNodesKeepOnlyOverlappingChunksAndHeights() {
+        ComponentId low = new ComponentId(-2, -3, -24, 64, -40);
+        ComponentId high = new ComponentId(-2, -3, -25, 105, -41);
+        ComponentId beside = new ComponentId(-1, -3, -8, 64, -40);
+        CoarseGraph graph = CoarseGraph.of(Map.of(
+                ChunkKeys.key(-2, -3), List.of(new CoarseNode(low, 60, 66, List.of()),
+                        new CoarseNode(high, 100, 110, List.of())),
+                ChunkKeys.key(-1, -3), List.of(new CoarseNode(beside, 60, 66, List.of()))));
+        Goal goal = new BoxGoal(-30, 60, -40, -20, 70, -35);
+        assertEquals(Set.of(low), CoarsePlanner.goalNodes(graph, goal));
     }
 
     @Test
