@@ -10,4 +10,7 @@ public interface Goal {
 
     /** False only when no goal cell can lie inside the window. */
     boolean mayOverlap(Window window);
+
+    /** A box, bounds inclusive, holding every goal cell. */
+    Bounds bounds();
 }

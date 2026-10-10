@@ -83,4 +83,16 @@ class GoalsTest {
         assertEquals(0.0, l.estimate(8, 65, 8), EPS);
         assertEquals(5.0, l.estimate(15, 65, 0), EPS);
     }
+
+    @Test
+    void pointGoalBoundsCoverTheRadius() {
+        PointGoal point = new PointGoal(10.5, 65, 10.5, 3, false);
+        assertEquals(new Bounds(7, Short.MIN_VALUE, 7, 13, Short.MAX_VALUE, 13), point.bounds());
+    }
+
+    @Test
+    void stopAreaBoundsIncludeTheMargin() {
+        StopAreaGoal stop = new StopAreaGoal(100, 100, 110, 110, 2.5);
+        assertEquals(new Bounds(96, Short.MIN_VALUE, 96, 114, Short.MAX_VALUE, 114), stop.bounds());
+    }
 }

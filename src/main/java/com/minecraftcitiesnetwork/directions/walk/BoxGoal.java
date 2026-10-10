@@ -20,6 +20,11 @@ public record BoxGoal(int minX, int minY, int minZ, int maxX, int maxY, int maxZ
         return maxX >= w.minX() && minX <= w.maxX() && maxZ >= w.minZ() && minZ <= w.maxZ();
     }
 
+    @Override
+    public Bounds bounds() {
+        return new Bounds(minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
     /** Distance from {@code v} to the range [min, max]; 0 inside. */
     static int gap(int v, int min, int max) {
         if (v < min) {

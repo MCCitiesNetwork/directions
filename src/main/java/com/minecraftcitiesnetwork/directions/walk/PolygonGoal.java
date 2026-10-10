@@ -43,6 +43,11 @@ public final class PolygonGoal implements Goal {
         return bounds.mayOverlap(window);
     }
 
+    @Override
+    public Bounds bounds() {
+        return bounds.bounds();
+    }
+
     private boolean inside(int px, int pz) {
         boolean in = false;
         for (int i = 0, j = xs.length - 1; i < xs.length; j = i++) {

@@ -22,6 +22,14 @@ public record PointGoal(double x, double y, double z, double radius, boolean inc
                 && Math.floor(z + radius) >= w.minZ() && Math.floor(z - radius) <= w.maxZ();
     }
 
+    @Override
+    public Bounds bounds() {
+        int minY = includeY ? (int) Math.floor(y - radius) : Short.MIN_VALUE;
+        int maxY = includeY ? (int) Math.floor(y + radius) : Short.MAX_VALUE;
+        return new Bounds((int) Math.floor(x - radius), minY, (int) Math.floor(z - radius),
+                (int) Math.floor(x + radius), maxY, (int) Math.floor(z + radius));
+    }
+
     private double distanceSquared(int cx, int cy, int cz) {
         double dx = cx + 0.5 - x;
         double dz = cz + 0.5 - z;

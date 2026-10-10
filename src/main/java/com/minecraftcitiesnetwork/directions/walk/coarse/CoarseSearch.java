@@ -81,7 +81,8 @@ public final class CoarseSearch {
         return Failure.NO_PATH;
     }
 
-    private static double distance(ComponentId a, ComponentId b) {
+    /** The cost of the edge between two components: the distance between their representative cells. */
+    static double distance(ComponentId a, ComponentId b) {
         double dx = a.x() - b.x();
         double dy = a.y() - b.y();
         double dz = a.z() - b.z();

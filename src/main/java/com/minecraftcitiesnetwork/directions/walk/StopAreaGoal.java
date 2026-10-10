@@ -28,6 +28,13 @@ public record StopAreaGoal(int minX, int minZ, int maxX, int maxZ, double margin
         return maxX + m >= w.minX() && minX - m <= w.maxX() && maxZ + m >= w.minZ() && minZ - m <= w.maxZ();
     }
 
+    /** The region widened by the margin plus one block, at any height. */
+    @Override
+    public Bounds bounds() {
+        int m = (int) Math.ceil(margin) + 1;
+        return new Bounds(minX - m, Short.MIN_VALUE, minZ - m, maxX + m, Short.MAX_VALUE, maxZ + m);
+    }
+
     private static double axis(double v, double min, double max) {
         if (v < min) {
             return min - v;
