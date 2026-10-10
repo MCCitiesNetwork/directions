@@ -19,7 +19,7 @@ so the trail heads for the bridge from the start.
   without the detour along the bank once the coarse layer has a graph of the synthetic city.
 - In-game, a `/gps` across Reveille's river heads for the bridge from the first route.
 - The server tick stays within the existing budgets while a world is being built.
-- With no graph for a world, behaviour is exactly that of the turn-back penalty alone.
+- With no finished graph for a world, behaviour is exactly that of the turn-back penalty alone.
 
 **Non-goals.** Costing roads over other ground (walking cost stays physical), routing through other
 worlds, and any change to the trail, arrow or boss bar.
@@ -96,7 +96,7 @@ walk/
 1. If the goal may overlap the window, run today's direct search first (exits NONE). A `COMPLETE`
    result is returned as is.
 2. Otherwise, or when the direct search found nothing, and a graph with at least one node exists for
-   the world:
+   the world and its build has finished (§6):
    a. Start node: `componentOf` the player's snapped start cell. Null (chunk not in the graph) →
       step 3.
    b. Goal nodes: for every chunk that the goal's bounding box overlaps, every node of that chunk whose
@@ -169,6 +169,14 @@ Reveille (measured): 259,968 existing chunks in 521 region files, about an hour 
 
 `ChunkColumnCache.decode`, after storing a captured chunk, computes that chunk's components and
 edges to neighbours that are in the live `ColumnStore`, and replaces the chunk's nodes in the graph.
+Only a graph that already exists (`CoarseGraphs.graph(world)` non-null) is updated; live captures
+never create one, so a world that was never built gets no partial graph of walked corridors. Only the
+builder creates graphs (`graphOrCreate`).
+
+Searches use a world's graph only once a build of it has finished
+(`CoarseGraphs.graphForPlanning(world)`, null unless the saved progress is `done`): before that,
+unbuilt chunks would read as impassable and a coarse search would spend its whole budget proving
+there is no path. A world being rebuilt is routed without its graph until the rebuild finishes.
 Edges on a side whose neighbour is not captured keep whatever the graph already has for that side
 (the neighbour's own edges to this chunk are rewritten only on the sides recomputed). So:
 
@@ -225,7 +233,7 @@ Lang keys (`walk.` section): `build-started`, `build-resumed`, `build-stopped`, 
 
 | Situation | Behaviour |
 |---|---|
-| No graph for the world, or `coarse.enabled: false` | Window search with the turn-back penalty, as today |
+| No graph for the world, its build not finished, or `coarse.enabled: false` | Window search with the turn-back penalty, as today |
 | Player's chunk not in the graph | Fallback for this search |
 | Goal area not built | Fallback for this search |
 | Coarse search over budget | Fallback, counted in stats |

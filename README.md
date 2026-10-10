@@ -56,9 +56,10 @@ connect. With it, routes head for bridges and gaps the window cannot see.
 - The graph is saved in `plugins/Directions/walk/`, one `.coarse` file per world. It loads in the
   background on startup.
 - It stays current by itself. Each chunk the trail reads updates that chunk in the graph, so
-  WorldEdit changes appear within five minutes once a player's trail loads that chunk again.
-- Without a graph, or with `coarse.enabled: false`, routing works as before: the window search
-  with the turn-back penalty.
+  WorldEdit changes appear within five minutes once a player's trail loads that chunk again. A world
+  that was never built gets no graph from this.
+- Until a build of the world has finished, or with `coarse.enabled: false`, routing works as before:
+  the window search with the turn-back penalty.
 
 Settings under `walking-paths.coarse:`
 - `enabled` (default `true`): use the graph when a world has one.

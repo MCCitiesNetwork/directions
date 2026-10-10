@@ -112,7 +112,7 @@ public final class WalkSearchService {
         UUID worldId = world.getUID();
         int radius = Math.min(settings.windowRadius(), Math.max(16, (world.getViewDistance() - 1) * 16));
         Window window = Window.around((int) Math.floor(x), (int) Math.floor(z), radius);
-        CoarseGraph graph = settings.coarse().enabled() ? graphs.graph(worldId) : null;
+        CoarseGraph graph = settings.coarse().enabled() ? graphs.graphForPlanning(worldId) : null;
         cache.capture(world, window).thenRunAsync(() -> {
             long budget = settings.timeBudgetMillis() * 1_000_000L;
             // GuidedSearch gives every phase its own deadline of the budget; this one is not read.
@@ -139,12 +139,18 @@ public final class WalkSearchService {
         return result;
     }
 
-    /** Main thread. Brings the graph's nodes for a freshly captured chunk up to date, on the pool. */
+    /**
+     * Main thread. Brings the graph's nodes for a freshly captured chunk up to date, on the pool.
+     * Only a graph that already exists is updated: a world gets one from a build, never from captures.
+     */
     private void captured(UUID world, int chunkX, int chunkZ) {
         if (!running || !settings.coarse().enabled()) {
             return;
         }
-        CoarseGraph graph = graphs.graphOrCreate(world);
+        CoarseGraph graph = graphs.graph(world);
+        if (graph == null) {
+            return;
+        }
         try {
             executor.execute(() -> link(graph, world, chunkX, chunkZ));
         } catch (RejectedExecutionException e) {

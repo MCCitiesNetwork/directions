@@ -114,7 +114,19 @@ public final class CoarseGraphs implements Listener {
         return state == null ? null : state.graph;
     }
 
-    /** The world's graph, made empty on first use. */
+    /**
+     * Any thread. The graph searches may use: only once a build of the world has finished, since
+     * until then unbuilt chunks would read as impassable. Null otherwise.
+     */
+    public @Nullable CoarseGraph graphForPlanning(UUID world) {
+        WorldGraph state = worlds.get(world);
+        if (state == null || state.loading || !state.progress.done()) {
+            return null;
+        }
+        return state.graph;
+    }
+
+    /** The world's graph, made empty on first use. Only the builder creates graphs. */
     public CoarseGraph graphOrCreate(UUID world) {
         WorldGraph state = state(world);
         CoarseGraph graph = state.graph;
