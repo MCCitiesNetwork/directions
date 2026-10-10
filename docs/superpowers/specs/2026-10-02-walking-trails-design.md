@@ -402,12 +402,9 @@ worst main-thread capture time per tick over the last minute.
 7. `/directions debug walk` with several players navigating: search p95 under the budget; worst
    main-thread capture time per tick under 2 ms.
 
-## 11. Future extension (not in scope)
+## 11. Whole-world layer (implemented)
 
-A coarse whole-world layer can be added without changing the units above: a `CoarseGuide` supplies an
-intermediate goal for each window (the next coarse waypoint) in place of the final goal's straight-line
-heuristic. `WindowSearch`, `Terrain`, `GuidePolicy` and the trail are unaffected. Trigger for doing it:
-manual testing or player reports show long walks being led into large dead ends. Observed during
-acceptance in October 2026 (a trail that turned the player around after an extension) and
-reproduced by `GuideSimulationTest`: the turn-back penalty bounds the damage, and this layer is the
-next piece of work.
+The coarse whole-world layer was implemented on 2026-10-10; see
+`2026-10-10-coarse-planner-design.md`. It was needed because of a trail that turned the player
+around after an extension, observed during acceptance in October 2026 and reproduced by
+`GuideSimulationTest`: the turn-back penalty bounds the damage, but only a whole-world view removes it.

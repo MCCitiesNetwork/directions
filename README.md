@@ -43,8 +43,28 @@ destination, and the whole way for `/gps` and `/compass`. Rides between stops ge
   you move.
 
 Configure it under `walking-paths:` in `config.yml`; `enabled: false` restores the plain arrow.
-Whole-world routing is set under `walking-paths.coarse:` (`enabled`, `build-chunks-per-tick`,
-`max-expansions`).
+
+### Whole-world routing
+The search window only sees about 160 blocks, so it cannot know where a river has a bridge or
+where a wall ends. The optional whole-world graph records how the walkable parts of each chunk
+connect. With it, routes head for bridges and gaps the window cannot see.
+
+- Build it with `/directions walk build <world>` (permission `directions.debug`). It runs in the
+  background. Check progress with `/directions debug walk`. A city the size of Reveille takes about
+  an hour at the default rate. `/directions walk build stop` stops it and saves progress. A later
+  build, or a restart, resumes where it stopped.
+- The graph is saved in `plugins/Directions/walk/`, one `.coarse` file per world. It loads in the
+  background on startup.
+- It stays current by itself. Each chunk the trail reads updates that chunk in the graph, so
+  WorldEdit changes appear within five minutes.
+- Without a graph, or with `coarse.enabled: false`, routing works as before: the window search
+  with the turn-back penalty.
+
+Settings under `walking-paths.coarse:`
+- `enabled` (default `true`): use the graph when a world has one.
+- `build-chunks-per-tick` (default 4, 1 to 32): how many chunks the build reads each tick.
+- `max-expansions` (default 50,000, 1,000 to 1,000,000): how much work one graph search may do.
+
 Existing installations need new lang keys, `walk.no-route`, `walk.debug-disabled` and the nine
 `walk.build-*` keys (`build-started`, `build-resumed`, `build-stopped`, `build-done`,
 `build-running`, `build-no-world`, `build-disabled`, `build-none`, `build-loading`); delete `lang.yml` to

@@ -50,7 +50,10 @@ walk/
 │   ├── CoarseSearch             A* over a CoarseGraph; returns a node path or a failure
 │   ├── CoarseGraphCodec         the on-disk format, read and write
 │   ├── RegionHeaders            which chunks exist in a region file, from its 4 KB header table
-│   └── Waypoints                picks the window search's goal from a node path and a window
+│   ├── Waypoints                picks the window search's goal from a node path and a window
+│   ├── GuidedSearch             composes the coarse plan with the window search; used by the service and the simulation
+│   ├── BuildOrder               pure build helper: which chunks of a region are still to do, in build order
+│   └── BuildRows                pure build helper: which rows of a build are complete, so saved progress skips no gap
 ├── bukkit/
 │   ├── CoarseGraphs             graphs per world, loading, saving, owned by the plugin
 │   ├── CoarseBuilder            the background build of one world
@@ -142,7 +145,7 @@ chunks in flight finish. Only one build runs at a time.
 A reload keeps the build running; it only re-reads `build-chunks-per-tick`. Disabling the plugin
 saves and stops it.
 
-Reveille: 521 region files, about 500,000 existing chunks, roughly two hours at 4 chunks per tick.
+Reveille (measured): 259,968 existing chunks in 521 region files, about an hour at 4 chunks per tick.
 
 ## 6. Keeping it current
 
@@ -236,7 +239,7 @@ Lang keys (`walk.` section): `build-started`, `build-resumed`, `build-stopped`, 
   parses negative region coordinates from file names.
 - `CoarseGraphCodec`: round trip of a graph with progress; a truncated stream fails cleanly.
 - `WalkSimulation` gains a coarse mode: the graph is built from the synthetic city with the real
-  `ChunkComponents`, and `plan` is mirrored by a test-side planner that follows §4. The river and
+  `ChunkComponents`, and every search runs through the same `GuidedSearch` the server uses. The river and
   dead-end scenarios then reach the goal with no reversal; the river walker reaches the bridge
   without passing the bank's far end.
 - Architecture: `walk.coarse` has no Bukkit imports.
