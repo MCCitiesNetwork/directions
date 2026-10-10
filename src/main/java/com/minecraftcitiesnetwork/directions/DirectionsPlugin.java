@@ -31,7 +31,7 @@ public class DirectionsPlugin extends JavaPlugin {
         this.lang.load();
         this.coarseGraphs = new CoarseGraphs(this);
         this.coarseGraphs.start();
-        this.coarseBuilder = new CoarseBuilder(this, coarseGraphs);
+        this.coarseBuilder = new CoarseBuilder(this, coarseGraphs, lang);
         reloadDirectionsData();
         this.navigationService = new NavigationService(this);
         this.navigationService.start();

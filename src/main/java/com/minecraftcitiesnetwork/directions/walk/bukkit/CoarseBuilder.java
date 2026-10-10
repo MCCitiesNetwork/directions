@@ -1,6 +1,5 @@
 package com.minecraftcitiesnetwork.directions.walk.bukkit;
 
-import com.minecraftcitiesnetwork.directions.DirectionsPlugin;
 import com.minecraftcitiesnetwork.directions.i18n.LangService;
 import com.minecraftcitiesnetwork.directions.walk.ColumnChunk;
 import com.minecraftcitiesnetwork.directions.walk.ColumnDecoder;
@@ -10,6 +9,7 @@ import com.minecraftcitiesnetwork.directions.walk.WalkRules;
 import com.minecraftcitiesnetwork.directions.walk.WalkSettings;
 import com.minecraftcitiesnetwork.directions.walk.coarse.BuildOrder;
 import com.minecraftcitiesnetwork.directions.walk.coarse.BuildProgress;
+import com.minecraftcitiesnetwork.directions.walk.coarse.BuildRows;
 import com.minecraftcitiesnetwork.directions.walk.coarse.ChunkComponents;
 import com.minecraftcitiesnetwork.directions.walk.coarse.ChunkEdges;
 import com.minecraftcitiesnetwork.directions.walk.coarse.ChunkKeys;
@@ -32,14 +32,15 @@ import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
-import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
@@ -61,34 +62,58 @@ public final class CoarseBuilder {
     private static final int SAVE_EVERY_CHUNKS = 2000;
     private static final long STOP_WAIT_SECONDS = 10;
 
-    public enum StartResult { STARTED, RESUMED, ALREADY_RUNNING, NO_WORLD, DISABLED }
+    public enum StartResult { STARTED, RESUMED, ALREADY_RUNNING, LOADING, DISABLED }
 
     /** A region file's chunks still to build, as local indices (row * 32 + column), in row order. */
     private record Region(int x, int z, short[] chunks) {
+        ChunkPos chunk(int i) {
+            short local = chunks[i];
+            return new ChunkPos(x * REGION_WIDTH + (local & 31), z * REGION_WIDTH + (local >> 5));
+        }
+
+        List<ChunkPos> all() {
+            List<ChunkPos> all = new ArrayList<>(chunks.length);
+            for (int i = 0; i < chunks.length; i++) {
+                all.add(chunk(i));
+            }
+            return all;
+        }
     }
 
-    /** A chunk of the build, with the index of its region in the build's region list. */
-    private record Pending(int region, int x, int z) {
+    /**
+     * The regions to build in order, and per region the chunks an earlier, interrupted build already
+     * built (as a set of local indices); empty for a build from the start.
+     */
+    private record Plan(List<Region> regions, Map<ChunkPos, BitSet> builtBefore) {
+        boolean builtBefore(ChunkPos chunk) {
+            BitSet built = builtBefore.get(new ChunkPos(Math.floorDiv(chunk.x(), REGION_WIDTH), Math.floorDiv(chunk.z(), REGION_WIDTH)));
+            return built != null && built.get(Math.floorMod(chunk.z(), REGION_WIDTH) * REGION_WIDTH + Math.floorMod(chunk.x(), REGION_WIDTH));
+        }
     }
 
     /** A chunk the builder thread has finished with; {@code built} is false when it failed. */
-    private record Finished(Pending chunk, boolean built) {
+    private record Finished(ChunkPos chunk, boolean built) {
     }
 
     private final JavaPlugin plugin;
     private final CoarseGraphs graphs;
+    private final LangService lang;
     private final MaterialKinds kinds = new MaterialKinds();
-    private volatile WalkRules rules = new WalkRules(WalkSettings.DEFAULTS.walker());
+    private WalkRules rules = new WalkRules(WalkSettings.DEFAULTS.walker());
     private int chunksPerTick = WalkSettings.CoarseSettings.DEFAULTS.buildChunksPerTick();
     private boolean enabled = WalkSettings.CoarseSettings.DEFAULTS.enabled();
     private @Nullable Build build;
 
-    public CoarseBuilder(JavaPlugin plugin, CoarseGraphs graphs) {
+    public CoarseBuilder(JavaPlugin plugin, CoarseGraphs graphs, LangService lang) {
         this.plugin = plugin;
         this.graphs = graphs;
+        this.lang = lang;
     }
 
-    /** Takes the new settings; a running build carries on with them. */
+    /**
+     * Takes the new settings. A running build keeps going at the new rate, but keeps the walking
+     * rules it started with so the whole graph is linked under one set of rules.
+     */
     public void configure(WalkSettings settings) {
         this.chunksPerTick = settings.coarse().buildChunksPerTick();
         this.rules = new WalkRules(settings.walker());
@@ -97,8 +122,7 @@ public final class CoarseBuilder {
 
     /**
      * Starts building the world, or resumes from its saved progress. Reads every region file header
-     * of the world first, so the chunk count is known when this returns. {@code NO_WORLD} is never
-     * returned here: the command reports an unknown world name before it has a world to pass.
+     * of the world first, so the chunk count is known when this returns.
      */
     public StartResult start(World world, CommandSender requester) {
         if (!enabled) {
@@ -108,6 +132,9 @@ public final class CoarseBuilder {
             return StartResult.ALREADY_RUNNING;
         }
         UUID id = world.getUID();
+        if (graphs.loading(id)) {
+            return StartResult.LOADING;
+        }
         BuildProgress saved = graphs.progress(id);
         boolean resume = !saved.equals(BuildProgress.NONE) && !saved.done();
         if (!resume && saved.done()) {
@@ -116,7 +143,7 @@ public final class CoarseBuilder {
         }
         BuildProgress from = resume ? saved : BuildProgress.NONE;
         graphs.graphOrCreate(id);
-        Build started = new Build(world, requester, regionsToBuild(world, from));
+        Build started = new Build(world, requester, plan(world, from));
         build = started;
         started.timer = Bukkit.getScheduler().runTaskTimer(plugin, started::tick, 1L, 1L);
         plugin.getLogger().info((resume ? "Resuming" : "Starting") + " the coarse graph build of " + world.getName()
@@ -165,40 +192,55 @@ public final class CoarseBuilder {
     }
 
     /** The region files of the world with the chunks still to do, in build order. Unreadable files are skipped. */
-    private List<Region> regionsToBuild(World world, BuildProgress from) {
+    private Plan plan(World world, BuildProgress from) {
         Path folder = regionFolder(world);
         if (!Files.isDirectory(folder)) {
-            return List.of();
+            return new Plan(List.of(), Map.of());
         }
         List<Path> files;
         try (Stream<Path> listing = Files.list(folder)) {
             files = listing.filter(p -> RegionHeaders.regionOf(String.valueOf(p.getFileName())) != null).toList();
         } catch (IOException e) {
             plugin.getLogger().log(Level.WARNING, "Could not list the region files in " + folder, e);
-            return List.of();
+            return new Plan(List.of(), Map.of());
         }
         List<Region> regions = new ArrayList<>();
+        Map<ChunkPos, BitSet> builtBefore = new HashMap<>();
         for (Path file : files) {
             ChunkPos region = RegionHeaders.regionOf(String.valueOf(file.getFileName()));
-            List<ChunkPos> chunks;
+            List<ChunkPos> existing;
             try {
-                chunks = BuildOrder.after(RegionHeaders.chunksIn(file), from, region.x(), region.z());
+                existing = RegionHeaders.chunksIn(file);
             } catch (IOException e) {
                 plugin.getLogger().warning("Skipping unreadable region file " + file + ": " + e.getMessage());
                 continue;
             }
-            if (chunks.isEmpty()) {
+            List<ChunkPos> toDo = BuildOrder.after(existing, from, region.x(), region.z());
+            if (toDo.size() < existing.size()) {
+                BitSet built = new BitSet(REGION_WIDTH * REGION_WIDTH);
+                for (ChunkPos chunk : existing) {
+                    built.set(local(chunk));
+                }
+                for (ChunkPos chunk : toDo) {
+                    built.clear(local(chunk));
+                }
+                builtBefore.put(region, built);
+            }
+            if (toDo.isEmpty()) {
                 continue;
             }
-            short[] local = new short[chunks.size()];
+            short[] local = new short[toDo.size()];
             for (int i = 0; i < local.length; i++) {
-                ChunkPos chunk = chunks.get(i);
-                local[i] = (short) (Math.floorMod(chunk.z(), REGION_WIDTH) * REGION_WIDTH + Math.floorMod(chunk.x(), REGION_WIDTH));
+                local[i] = (short) local(toDo.get(i));
             }
             regions.add(new Region(region.x(), region.z(), local));
         }
         regions.sort(Comparator.comparingInt(Region::x).thenComparingInt(Region::z));
-        return regions;
+        return new Plan(regions, builtBefore);
+    }
+
+    private static int local(ChunkPos chunk) {
+        return Math.floorMod(chunk.z(), REGION_WIDTH) * REGION_WIDTH + Math.floorMod(chunk.x(), REGION_WIDTH);
     }
 
     private static Path regionFolder(World world) {
@@ -216,11 +258,13 @@ public final class CoarseBuilder {
         final UUID worldId;
         final String worldName;
         final CommandSender requester;
+        final Plan plan;
         final List<Region> regions;
         final int total;
+        /** The rules at the start; a reload during the build does not change them. */
+        final WalkRules buildRules = rules;
         final long startedNanos = System.nanoTime();
-        /** Outstanding chunks per row, keyed by region index * 32 + row, for rows of opened regions. */
-        final TreeMap<Integer, Integer> outstanding = new TreeMap<>();
+        final BuildRows rows = new BuildRows();
         final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "Directions-CoarseBuild");
             t.setDaemon(true);
@@ -228,6 +272,12 @@ public final class CoarseBuilder {
         });
         /** Any thread: chunks the builder thread has finished, for the main thread to count. */
         final Queue<Finished> finished = new ConcurrentLinkedQueue<>();
+        /**
+         * Chunks an earlier build already built that border the next region's chunks. They are decoded
+         * into the build store first, without touching the graph, so the region links across the point
+         * where the earlier build stopped.
+         */
+        final ArrayDeque<ChunkPos> warmUp = new ArrayDeque<>();
         /** Builder thread only: decoded chunks, so each chunk can be linked to the neighbours built before it. */
         final ColumnStore store = new ColumnStore(BUILD_STORE_CHUNKS, System::currentTimeMillis);
         /**
@@ -241,20 +291,25 @@ public final class CoarseBuilder {
 
         BukkitTask timer;
         int regionIndex;
+        boolean regionOpened;
         int nextInRegion;
+        /** Chunks requested and not yet finished by the builder thread. */
         int inFlight;
+        /** Warm-up chunks requested and not yet handed to the builder thread. */
+        int warming;
         int done;
         int skipped;
         int sinceSave;
         boolean failureToLoadLogged;
         BuildProgress lastProgress = BuildProgress.NONE;
 
-        Build(World world, CommandSender requester, List<Region> regions) {
+        Build(World world, CommandSender requester, Plan plan) {
             this.world = world;
             this.worldId = world.getUID();
             this.worldName = world.getName();
             this.requester = requester;
-            this.regions = regions;
+            this.plan = plan;
+            this.regions = plan.regions();
             int sum = 0;
             for (Region region : regions) {
                 sum += region.chunks().length;
@@ -272,68 +327,74 @@ public final class CoarseBuilder {
                 return;
             }
             drainFinished();
-            // In flight counts until the builder thread is done with a chunk, so snapshots waiting
-            // to be decoded never pile up beyond this.
             int perTick = chunksPerTick;
             int requested = 0;
-            while (inFlight < perTick * 4 && requested < perTick) {
-                Pending next = next();
-                if (next == null) {
+            while (requested < perTick) {
+                ChunkPos warm = warmUp.poll();
+                if (warm != null) {
+                    // Costs a request but is not counted as a chunk of the build.
+                    requested++;
+                    warming++;
+                    request(warm, true);
+                    continue;
+                }
+                // A region's chunks wait until the neighbours they link to are queued for decoding.
+                // In flight counts until the builder thread is done with a chunk, so snapshots waiting
+                // to be decoded never pile up beyond this.
+                if (warming > 0 || inFlight >= perTick * 4 || regionIndex >= regions.size()) {
                     break;
+                }
+                Region region = regions.get(regionIndex);
+                if (!regionOpened) {
+                    regionOpened = true;
+                    List<ChunkPos> chunks = region.all();
+                    rows.open(region.x(), region.z(), chunks);
+                    warmUp.addAll(BuildOrder.builtNeighbours(chunks, plan::builtBefore));
+                    continue;
+                }
+                if (nextInRegion >= region.chunks().length) {
+                    regionIndex++;
+                    regionOpened = false;
+                    nextInRegion = 0;
+                    continue;
                 }
                 requested++;
                 inFlight++;
-                request(next);
+                request(region.chunk(nextInRegion++), false);
             }
-            if (inFlight == 0 && regionIndex >= regions.size()) {
+            if (inFlight == 0 && warming == 0 && regionIndex >= regions.size()) {
                 complete();
             }
         }
 
-        /** The next chunk to request, opening the next region when the current one is used up. */
-        @Nullable Pending next() {
-            while (regionIndex < regions.size()) {
-                Region region = regions.get(regionIndex);
-                if (nextInRegion == 0) {
-                    for (short local : region.chunks()) {
-                        outstanding.merge(regionIndex * REGION_WIDTH + (local >> 5), 1, Integer::sum);
-                    }
-                }
-                if (nextInRegion < region.chunks().length) {
-                    short local = region.chunks()[nextInRegion++];
-                    return new Pending(regionIndex,
-                            region.x() * REGION_WIDTH + (local & 31),
-                            region.z() * REGION_WIDTH + (local >> 5));
-                }
-                regionIndex++;
-                nextInRegion = 0;
-            }
-            return null;
-        }
-
-        void request(Pending chunk) {
+        void request(ChunkPos chunk, boolean warm) {
             if (world.isChunkLoaded(chunk.x(), chunk.z())) {
-                snapshot(chunk, world.getChunkAt(chunk.x(), chunk.z()));
+                snapshot(chunk, warm, world.getChunkAt(chunk.x(), chunk.z()));
                 return;
             }
             world.getChunkAtAsync(chunk.x(), chunk.z(), false).whenComplete((loaded, error) -> {
                 if (Bukkit.isPrimaryThread()) {
-                    arrived(chunk, loaded, error);
+                    arrived(chunk, warm, loaded, error);
                     return;
                 }
                 try {
-                    Bukkit.getScheduler().runTask(plugin, () -> arrived(chunk, loaded, error));
+                    Bukkit.getScheduler().runTask(plugin, () -> arrived(chunk, warm, loaded, error));
                 } catch (IllegalPluginAccessException disabled) {
                     // The plugin is disabling; the build has been stopped.
                 }
             });
         }
 
-        void arrived(Pending chunk, @Nullable Chunk loaded, @Nullable Throwable error) {
+        void arrived(ChunkPos chunk, boolean warm, @Nullable Chunk loaded, @Nullable Throwable error) {
             if (build != this) {
                 return;
             }
             if (loaded == null || error != null) {
+                if (warm) {
+                    // Nothing to link to on that side; the earlier build skipped it too.
+                    warming--;
+                    return;
+                }
                 if (!failureToLoadLogged) {
                     failureToLoadLogged = true;
                     plugin.getLogger().warning("Coarse graph build of " + worldName + ": could not load chunk "
@@ -344,24 +405,42 @@ public final class CoarseBuilder {
                 drainFinished();
                 return;
             }
-            snapshot(chunk, loaded);
+            snapshot(chunk, warm, loaded);
         }
 
-        void snapshot(Pending chunk, Chunk loaded) {
+        void snapshot(ChunkPos chunk, boolean warm, Chunk loaded) {
             ChunkSnapshot snapshot = loaded.getChunkSnapshot(false, false, false);
             int minY = world.getMinHeight();
             int maxY = world.getMaxHeight();
-            WalkRules walkRules = rules;
-            CoarseGraph graph = graphs.graphOrCreate(worldId);
             try {
-                executor.execute(() -> link(chunk, snapshot, minY, maxY, walkRules, graph));
+                if (warm) {
+                    executor.execute(() -> warmUp(chunk, snapshot, minY, maxY));
+                } else {
+                    CoarseGraph graph = graphs.graphOrCreate(worldId);
+                    executor.execute(() -> link(chunk, snapshot, minY, maxY, graph));
+                }
             } catch (RejectedExecutionException stopped) {
                 // Only after the build ended; nothing counts any more.
+            }
+            if (warm) {
+                // The builder thread runs tasks in order, so chunks requested from now on decode after this one.
+                warming--;
+            }
+        }
+
+        /** Builder thread: decodes a chunk an earlier build already built, so later chunks can link to it. */
+        void warmUp(ChunkPos chunk, ChunkSnapshot snapshot, int minY, int maxY) {
+            try {
+                ColumnChunk decoded = ColumnDecoder.decode(chunk.x(), chunk.z(), new SnapshotBlocks(snapshot, kinds, minY, maxY));
+                store.put(worldId, decoded);
+                keepEastColumn(decoded);
+            } catch (RuntimeException e) {
+                logBuildFailure(chunk, e);
             }
         }
 
         /** Builder thread: decodes the chunk, works out its components and edges, and puts them in the graph. */
-        void link(Pending chunk, ChunkSnapshot snapshot, int minY, int maxY, WalkRules walkRules, CoarseGraph graph) {
+        void link(ChunkPos chunk, ChunkSnapshot snapshot, int minY, int maxY, CoarseGraph graph) {
             boolean built = false;
             try {
                 int x = chunk.x();
@@ -371,26 +450,31 @@ public final class CoarseBuilder {
                 keepEastColumn(decoded);
                 restoreWestNeighbour(x, z);
                 Terrain terrain = store.terrain(worldId);
-                List<Component> components = ChunkComponents.of(terrain, x, z, walkRules);
-                ChunkEdges.Linked linked = ChunkEdges.compute(terrain, walkRules, x, z, components);
+                List<Component> components = ChunkComponents.of(terrain, x, z, buildRules);
+                ChunkEdges.Linked linked = ChunkEdges.compute(terrain, buildRules, x, z, components);
                 graph.replace(x, z, linked.nodes(), linked.sides());
                 graphs.markDirty(worldId);
                 built = true;
             } catch (RuntimeException e) {
-                if (!failureToBuildLogged) {
-                    failureToBuildLogged = true;
-                    plugin.getLogger().log(Level.WARNING, "Coarse graph build of " + worldName + ": could not build chunk "
-                            + chunk.x() + "," + chunk.z() + "; it and any further chunks that fail are skipped", e);
-                }
+                logBuildFailure(chunk, e);
             } finally {
                 finished.add(new Finished(chunk, built));
             }
         }
 
         /** Builder thread. */
+        void logBuildFailure(ChunkPos chunk, RuntimeException e) {
+            if (!failureToBuildLogged) {
+                failureToBuildLogged = true;
+                plugin.getLogger().log(Level.WARNING, "Coarse graph build of " + worldName + ": could not build chunk "
+                        + chunk.x() + "," + chunk.z() + "; it and any further chunks that fail are skipped", e);
+            }
+        }
+
+        /** Builder thread. */
         void keepEastColumn(ColumnChunk chunk) {
             int regionX = Math.floorDiv(chunk.chunkX(), REGION_WIDTH);
-            if (regionX != eastColumnsRegionX) {
+            if (regionX > eastColumnsRegionX) {
                 eastColumnsRegionX = regionX;
                 eastColumns.keySet().removeIf(key -> Math.floorDiv(ChunkKeys.x(key), REGION_WIDTH) < regionX - 1);
             }
@@ -412,7 +496,7 @@ public final class CoarseBuilder {
 
         /** Counts the chunks the builder thread has finished, and records each row once all of it is done. */
         void drainFinished() {
-            boolean progressed = false;
+            BuildProgress advanced = null;
             Finished next;
             while ((next = finished.poll()) != null) {
                 inFlight--;
@@ -420,18 +504,15 @@ public final class CoarseBuilder {
                 if (!next.built()) {
                     skipped++;
                 }
-                Pending chunk = next.chunk();
-                outstanding.merge(chunk.region() * REGION_WIDTH + Math.floorMod(chunk.z(), REGION_WIDTH), -1, Integer::sum);
-                while (!outstanding.isEmpty() && outstanding.firstEntry().getValue() == 0) {
-                    int key = outstanding.pollFirstEntry().getKey();
-                    Region region = regions.get(key / REGION_WIDTH);
-                    lastProgress = new BuildProgress(region.x(), region.z(), key % REGION_WIDTH, false);
-                    progressed = true;
+                BuildProgress progress = rows.finish(next.chunk());
+                if (progress != null) {
+                    advanced = progress;
                 }
                 sinceSave++;
             }
-            if (progressed) {
-                graphs.setProgress(worldId, lastProgress);
+            if (advanced != null) {
+                lastProgress = advanced;
+                graphs.setProgress(worldId, advanced);
             }
             if (sinceSave >= SAVE_EVERY_CHUNKS) {
                 sinceSave = 0;
@@ -448,8 +529,7 @@ public final class CoarseBuilder {
                     + skipped + " skipped) in " + elapsedSeconds() / 60 + " min");
             boolean present = requester instanceof ConsoleCommandSender
                     || (requester instanceof Player player && player.isOnline());
-            if (present && plugin instanceof DirectionsPlugin directions) {
-                LangService lang = directions.getLang();
+            if (present) {
                 lang.send(requester, "walk.build-done",
                         lang.placeholderRaw("prefix", lang.raw("prefix")),
                         lang.placeholder("world", worldName),

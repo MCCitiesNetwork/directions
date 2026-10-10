@@ -67,4 +67,18 @@ class BuildOrderTest {
         List<ChunkPos> region = wholeRegion(4, 4);
         assertTrue(BuildOrder.after(region, new BuildProgress(0, 0, 31, true), 4, 4).isEmpty());
     }
+
+    @Test
+    void warmsTheBuiltNeighboursWestAndNorthOfTheChunksToDo() {
+        List<ChunkPos> todo = List.of(new ChunkPos(0, 6), new ChunkPos(1, 6), new ChunkPos(0, 7));
+        java.util.Set<ChunkPos> builtBefore = java.util.Set.of(
+                new ChunkPos(0, 5), new ChunkPos(1, 5), new ChunkPos(-1, 6), new ChunkPos(-1, 7), new ChunkPos(2, 5));
+        assertEquals(List.of(new ChunkPos(-1, 6), new ChunkPos(0, 5), new ChunkPos(1, 5), new ChunkPos(-1, 7)),
+                BuildOrder.builtNeighbours(todo, builtBefore::contains));
+    }
+
+    @Test
+    void nothingToWarmOnAFreshBuild() {
+        assertTrue(BuildOrder.builtNeighbours(wholeRegion(0, 0), c -> false).isEmpty());
+    }
 }

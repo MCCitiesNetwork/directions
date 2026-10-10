@@ -1,7 +1,10 @@
 package com.minecraftcitiesnetwork.directions.walk.coarse;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Which chunks of a region a world build still has to do. Regions are built in order of
@@ -41,5 +44,25 @@ public final class BuildOrder {
             }
         }
         return left;
+    }
+
+    /**
+     * The west and north neighbours of the chunks to do that an earlier, interrupted build already
+     * built, in the order the chunks are done. A resumed build decodes these first (without changing
+     * the graph) so its first chunks link across the point where the earlier build stopped.
+     */
+    public static List<ChunkPos> builtNeighbours(List<ChunkPos> toDo, Predicate<ChunkPos> builtBefore) {
+        Set<ChunkPos> neighbours = new LinkedHashSet<>();
+        for (ChunkPos chunk : toDo) {
+            ChunkPos west = new ChunkPos(chunk.x() - 1, chunk.z());
+            ChunkPos north = new ChunkPos(chunk.x(), chunk.z() - 1);
+            if (builtBefore.test(west)) {
+                neighbours.add(west);
+            }
+            if (builtBefore.test(north)) {
+                neighbours.add(north);
+            }
+        }
+        return List.copyOf(neighbours);
     }
 }

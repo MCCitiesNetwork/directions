@@ -121,6 +121,12 @@ public final class CoarseGraphs implements Listener {
         return graph;
     }
 
+    /** True while the world's graph file is being read; its graph and progress are not known yet. */
+    public boolean loading(UUID world) {
+        WorldGraph state = worlds.get(world);
+        return state != null && state.loading;
+    }
+
     public BuildProgress progress(UUID world) {
         return state(world).progress;
     }

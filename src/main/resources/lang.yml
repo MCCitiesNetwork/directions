@@ -61,3 +61,4 @@ walk:
   build-no-world: "<prefix><red>No world named <world>."
   build-disabled: "<prefix><yellow>Whole-world routing is disabled (walking-paths.coarse.enabled: false)."
   build-none: "<prefix><yellow>No walking graph build is running."
+  build-loading: "<prefix><yellow>The walking graph of <world> is still loading; try again in a moment."

@@ -93,7 +93,7 @@ public class DirectionsCommand {
                     lang.placeholder("world", world.getName()),
                     lang.placeholder("chunks", String.valueOf(builder.total())));
             case ALREADY_RUNNING -> lang.send(sender, "walk.build-running", prefix);
-            case NO_WORLD -> lang.send(sender, "walk.build-no-world", prefix, lang.placeholder("world", worldName));
+            case LOADING -> lang.send(sender, "walk.build-loading", prefix, lang.placeholder("world", world.getName()));
             case DISABLED -> lang.send(sender, "walk.build-disabled", prefix);
         }
     }
