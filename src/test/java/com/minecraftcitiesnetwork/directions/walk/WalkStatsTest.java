@@ -65,6 +65,16 @@ class WalkStatsTest {
     }
 
     @Test
+    void coarseSearchTimesAreReported() {
+        WalkStats stats = new WalkStats(() -> 0L);
+        for (int ms = 1; ms <= 20; ms++) {
+            stats.recordCoarse(ms * 1_000_000L);
+        }
+        assertTrue(stats.describe(0).contains("Coarse search: p50 10.0 ms, p95 19.0 ms (last 20)"),
+                stats.describe(0).toString());
+    }
+
+    @Test
     void fallbacksAreCounted() {
         WalkStats stats = new WalkStats(() -> 0L);
         stats.recordFallback();

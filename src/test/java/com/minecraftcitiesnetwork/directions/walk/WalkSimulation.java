@@ -160,7 +160,7 @@ final class WalkSimulation {
                         200_000, Long.MAX_VALUE);
                 pendingOrder = order;
                 pendingResult = graph == null ? search.search(terrain, request)
-                        : guided.search(terrain, request, graph, COARSE_MAX_EXPANSIONS);
+                        : guided.search(terrain, request, graph, COARSE_MAX_EXPANSIONS, Long.MAX_VALUE);
                 resultDue = now + SEARCH_LATENCY_MILLIS;
             }
             route = policy.route();

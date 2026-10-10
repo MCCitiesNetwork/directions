@@ -118,8 +118,21 @@ The coarse search runs on every plan, not once per leg: it costs a few milliseco
 blocks, and recomputing keeps it correct after chunk changes without any invalidation logic.
 
 **Budget.** A coarse search that has to explore a whole connected region (an unreachable island) can
-touch every node. `coarse.max-expansions` (default 50,000) bounds it; a `BUDGET` falls back and is
-counted. The window search's own time budget is unchanged.
+touch every node. `coarse.max-expansions` (default 50,000) bounds it, and so does time: the coarse
+search reads the clock every 256 expansions. A `BUDGET` falls back and is counted.
+
+`GuidedSearch` takes the time budget (`time-budget-millis`) as a duration, not a deadline, and gives
+each phase its own deadline of that budget from when the phase starts: the direct search, the coarse
+search, the search to the waypoint, and the fallback. A slow phase (the coarse search measured 35–45 ms
+at the 50,000 cap, 80 ms cold) therefore never leaves the next one without time. The fallback does not
+repeat the direct phase: when step 1 ran, it runs only the exit phase (`WindowSearch.searchOnward`:
+exits next to uncaptured terrain when the goal may overlap the window, any exit otherwise). A plan can
+take a few budgets in the worst case; the trail keeps its previous route meanwhile.
+
+`SearchResult.coarseNanos` reports the time spent planning over the graph (0 when it was not
+consulted), and `/directions debug walk` shows its p50 and p95 as `Coarse search: p50 x ms, p95 y ms
+(last n)`. A fallback is counted whenever the graph was usable and the result was neither guided by it
+nor the goal reached directly.
 
 ## 5. Building a world
 

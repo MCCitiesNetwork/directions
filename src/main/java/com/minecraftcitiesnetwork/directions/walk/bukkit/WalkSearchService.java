@@ -114,11 +114,18 @@ public final class WalkSearchService {
         Window window = Window.around((int) Math.floor(x), (int) Math.floor(z), radius);
         CoarseGraph graph = settings.coarse().enabled() ? graphs.graph(worldId) : null;
         cache.capture(world, window).thenRunAsync(() -> {
-            long deadline = System.nanoTime() + settings.timeBudgetMillis() * 1_000_000L;
-            SearchRequest request = new SearchRequest(x, y, z, goal, window, routeEnd, settings.maxExpansions(), deadline);
-            SearchResult r = search.search(store.terrain(worldId), request, graph, settings.coarse().maxExpansions());
+            long budget = settings.timeBudgetMillis() * 1_000_000L;
+            // GuidedSearch gives every phase its own deadline of the budget; this one is not read.
+            SearchRequest request = new SearchRequest(x, y, z, goal, window, routeEnd, settings.maxExpansions(),
+                    System.nanoTime() + budget);
+            SearchResult r = search.search(store.terrain(worldId), request, graph, settings.coarse().maxExpansions(),
+                    budget);
             stats.record(r);
-            if (graph != null && !graph.isEmpty() && !goal.mayOverlap(window) && !r.coarse()) {
+            if (r.coarseNanos() > 0) {
+                stats.recordCoarse(r.coarseNanos());
+            }
+            boolean directlyReached = goal.mayOverlap(window) && r.status() == SearchResult.Status.COMPLETE;
+            if (graph != null && !graph.isEmpty() && !r.coarse() && !directlyReached) {
                 stats.recordFallback();
             }
             toMain(() -> result.complete(r));

@@ -28,9 +28,19 @@ public final class CoarsePlanner {
     public record Plan(ComponentId waypoint, CellSetGoal goal, double remaining) {
     }
 
-    /** A plan toward {@code goal}, or null when the coarse graph cannot give one. */
+    /** As {@link #plan(CoarseGraph, Terrain, WalkRules, WindowSearch.Start, Goal, Window, int, long)} with no deadline. */
     public static Plan plan(CoarseGraph graph, Terrain terrain, WalkRules rules, WindowSearch.Start start,
                             Goal goal, Window window, int maxExpansions) {
+        return plan(graph, terrain, rules, start, goal, window, maxExpansions, Long.MAX_VALUE);
+    }
+
+    /**
+     * A plan toward {@code goal}, or null when the coarse graph cannot give one.
+     *
+     * @param deadlineNanos {@link System#nanoTime()} value after which the coarse search gives up
+     */
+    public static Plan plan(CoarseGraph graph, Terrain terrain, WalkRules rules, WindowSearch.Start start,
+                            Goal goal, Window window, int maxExpansions, long deadlineNanos) {
         ComponentId startId;
         try {
             startId = ChunkComponents.componentOf(terrain, start.x() >> 4, start.z() >> 4,
@@ -46,7 +56,7 @@ public final class CoarsePlanner {
         if (goals.isEmpty()) {
             return null;
         }
-        if (!(CoarseSearch.search(graph, startId, goals, goal, maxExpansions) instanceof CoarseSearch.Found found)) {
+        if (!(CoarseSearch.search(graph, startId, goals, goal, maxExpansions, deadlineNanos) instanceof CoarseSearch.Found found)) {
             return null;
         }
         List<ComponentId> path = found.path();

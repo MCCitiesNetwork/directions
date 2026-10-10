@@ -33,10 +33,23 @@ public final class CoarseSearch {
             .thenComparingDouble(Entry::h)
             .thenComparing(Entry::id, ID_ORDER);
 
+    /** How often, in expansions, the clock is read against the deadline. */
+    private static final int CLOCK_CHECK_MASK = 255;
+
     private CoarseSearch() {}
 
+    /** As {@link #search(CoarseGraph, ComponentId, Set, Goal, int, long)} with no deadline. */
     public static Result search(CoarseGraph graph, ComponentId start, Set<ComponentId> goals, Goal goal,
             int maxExpansions) {
+        return search(graph, start, goals, goal, maxExpansions, Long.MAX_VALUE);
+    }
+
+    /**
+     * @param deadlineNanos {@link System#nanoTime()} value after which the search gives up with
+     *                      BUDGET; read every 256 expansions
+     */
+    public static Result search(CoarseGraph graph, ComponentId start, Set<ComponentId> goals, Goal goal,
+            int maxExpansions, long deadlineNanos) {
         if (goals.isEmpty() || graph.node(start) == null) {
             return Failure.NO_PATH;
         }
@@ -53,6 +66,9 @@ public final class CoarseSearch {
                 continue;
             }
             if (++expansions > maxExpansions) {
+                return Failure.BUDGET;
+            }
+            if ((expansions & CLOCK_CHECK_MASK) == 0 && System.nanoTime() > deadlineNanos) {
                 return Failure.BUDGET;
             }
             if (goals.contains(entry.id())) {

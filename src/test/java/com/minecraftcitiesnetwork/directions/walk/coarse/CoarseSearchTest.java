@@ -98,6 +98,21 @@ class CoarseSearchTest {
     }
 
     @Test
+    void passedDeadlineStopsALongSearch() {
+        // The clock is read every 256 expansions; a 2,000-chunk line needs 2,000.
+        assertEquals(CoarseSearch.Failure.BUDGET, CoarseSearch.search(line(2000), id(0, 0), Set.of(id(1999, 0)),
+                goalAt(id(1999, 0)), 1_000_000, System.nanoTime() - 1));
+        assertInstanceOf(CoarseSearch.Found.class, CoarseSearch.search(line(2000), id(0, 0), Set.of(id(1999, 0)),
+                goalAt(id(1999, 0)), 1_000_000, Long.MAX_VALUE));
+    }
+
+    @Test
+    void passedDeadlineIsNotReadBeforeTheFirstCheck() {
+        assertInstanceOf(CoarseSearch.Found.class, CoarseSearch.search(line(10), id(0, 0), Set.of(id(9, 0)),
+                goalAt(id(9, 0)), 1_000_000, System.nanoTime() - 1));
+    }
+
+    @Test
     void unknownStartIsNoPath() {
         assertEquals(CoarseSearch.Failure.NO_PATH, run(line(3), id(50, 50), id(2, 0), 1000));
     }

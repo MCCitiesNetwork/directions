@@ -142,6 +142,29 @@ class WindowSearchTest {
     }
 
     @Test
+    void searchOnwardRunsOnlyTheExitPhase() {
+        // The goal overlaps the window but lies behind uncaptured terrain: search() runs the direct
+        // phase, finds nothing and leads to the edge of the unknown; searchOnward goes there at once.
+        Terrain base = field().terrain();
+        Terrain clipped = (x, z) -> x > 10 ? null : base.surfaces(x, z);
+        SearchRequest req = request(0.5, 65, 0.5, at(35, 65, 0), new Window(-20, -20, 39, 20));
+        SearchResult full = SEARCH.search(clipped, req);
+        SearchResult onward = SEARCH.searchOnward(clipped, req);
+        assertEquals(SearchResult.Status.PARTIAL, onward.status());
+        assertEquals(full.route().end(), onward.route().end());
+        assertEquals(full.expansions(), onward.expansions());
+    }
+
+    @Test
+    void searchOnwardLeavesByAnyExitWhenTheGoalIsOutsideTheWindow() {
+        SearchRequest req = request(0.5, 65, 0.5, at(35, 65, 0), Window.around(0, 0, 20));
+        SearchResult full = SEARCH.search(field().terrain(), req);
+        SearchResult onward = SEARCH.searchOnward(field().terrain(), req);
+        assertEquals(full.status(), onward.status());
+        assertEquals(full.route().end(), onward.route().end());
+    }
+
+    @Test
     void expansionCapReportsBudget() {
         SearchRequest req = new SearchRequest(0.5, 65, 0.5, at(0, 200, 0), new Window(0, 0, 39, 39), null, 5, Long.MAX_VALUE);
         assertEquals(SearchResult.Status.BUDGET, SEARCH.search(flat(40, 40).terrain(), req).status());

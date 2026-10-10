@@ -12,4 +12,13 @@ package com.minecraftcitiesnetwork.directions.walk;
  */
 public record SearchRequest(double x, double y, double z, Goal goal, Window window, Cell routeEnd,
                             int maxExpansions, long deadlineNanos) {
+    /** The same search with another deadline. */
+    public SearchRequest withDeadline(long deadline) {
+        return new SearchRequest(x, y, z, goal, window, routeEnd, maxExpansions, deadline);
+    }
+
+    /** The same search toward another goal, with no route being followed. */
+    public SearchRequest toward(Goal other, long deadline) {
+        return new SearchRequest(x, y, z, other, window, null, maxExpansions, deadline);
+    }
 }

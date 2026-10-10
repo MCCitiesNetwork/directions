@@ -29,6 +29,7 @@ class GuidedSearchTest {
     private static final int START_X = 8;
     private static final int START_Z = 24;
     private static final int COARSE_MAX_EXPANSIONS = 10_000;
+    private static final long BUDGET = Long.MAX_VALUE;
 
     /**
      * 20 x 3 chunks of flat floor (feet at y 65) with a wall too tall to climb or drop from filling
@@ -78,7 +79,7 @@ class GuidedSearchTest {
     @Test
     void goalInsideTheWindowIsReachedDirectly() {
         SearchResult result = GUIDED.search(NEAR_START, request(new BoxGoal(40, 65, 24, 40, 65, 24)), GRAPH,
-                COARSE_MAX_EXPANSIONS);
+                COARSE_MAX_EXPANSIONS, BUDGET);
         assertEquals(SearchResult.Status.COMPLETE, result.status());
         assertFalse(result.coarse());
         assertTrue(result.route().complete());
@@ -91,7 +92,7 @@ class GuidedSearchTest {
                 COARSE_MAX_EXPANSIONS);
         assertNotNull(plan);
 
-        SearchResult result = GUIDED.search(NEAR_START, request(FAR_GOAL), GRAPH, COARSE_MAX_EXPANSIONS);
+        SearchResult result = GUIDED.search(NEAR_START, request(FAR_GOAL), GRAPH, COARSE_MAX_EXPANSIONS, BUDGET);
         assertEquals(SearchResult.Status.PARTIAL, result.status());
         assertTrue(result.coarse());
         assertFalse(result.route().complete());
@@ -108,7 +109,7 @@ class GuidedSearchTest {
         assertNotNull(CoarsePlanner.plan(GRAPH, walled, RULES, start, FAR_GOAL, WINDOW, COARSE_MAX_EXPANSIONS),
                 "the graph should still give a plan beyond the wall");
 
-        SearchResult result = GUIDED.search(walled, request(FAR_GOAL), GRAPH, COARSE_MAX_EXPANSIONS);
+        SearchResult result = GUIDED.search(walled, request(FAR_GOAL), GRAPH, COARSE_MAX_EXPANSIONS, BUDGET);
         SearchResult exitSearch = WINDOW_SEARCH.search(walled, request(FAR_GOAL));
         assertEquals(SearchResult.Status.PARTIAL, result.status());
         assertFalse(result.coarse());
@@ -116,10 +117,37 @@ class GuidedSearchTest {
     }
 
     @Test
+    void eachPhaseGetsItsOwnDeadlineFromTheBudget() {
+        // The request's own deadline has long passed; the guided search ignores it and gives the
+        // coarse search and each window search a fresh deadline of the budget.
+        SearchRequest stale = new SearchRequest(START_X + 0.5, 65, START_Z + 0.5, FAR_GOAL, WINDOW, null, 1_000_000,
+                Long.MIN_VALUE);
+        SearchResult result = GUIDED.search(NEAR_START, stale, GRAPH, COARSE_MAX_EXPANSIONS, 10_000_000_000L);
+        assertEquals(SearchResult.Status.PARTIAL, result.status());
+        assertTrue(result.coarse());
+        assertTrue(result.coarseNanos() > 0, "the coarse search time is reported");
+    }
+
+    @Test
+    void theFallbackDoesNotRepeatTheDirectSearch() {
+        // A goal inside the window behind the wall: the direct search fails, the graph has no node for
+        // the wall, and the fallback leads on by the exit phase alone, as the plain search would.
+        Goal behindTheWall = new BoxGoal(80, 65, 8, 80, 65, 8);
+        Terrain walled = nearStart(world().fill(60, 65, 0, 63, 72, 47, BlockKind.SOLID).terrain());
+        SearchResult plain = WINDOW_SEARCH.search(walled, request(behindTheWall));
+        SearchResult guided = GUIDED.search(walled, request(behindTheWall), GRAPH, COARSE_MAX_EXPANSIONS, BUDGET);
+        assertEquals(plain.status(), guided.status());
+        assertFalse(guided.coarse());
+        if (plain.found()) {
+            assertEquals(plain.route().end(), guided.route().end());
+        }
+    }
+
+    @Test
     void nullGraphBehavesAsBefore() {
         for (Goal goal : List.of(FAR_GOAL, new BoxGoal(40, 65, 24, 40, 65, 24))) {
             SearchResult alone = WINDOW_SEARCH.search(NEAR_START, request(goal));
-            SearchResult guided = GUIDED.search(NEAR_START, request(goal), null, COARSE_MAX_EXPANSIONS);
+            SearchResult guided = GUIDED.search(NEAR_START, request(goal), null, COARSE_MAX_EXPANSIONS, BUDGET);
             assertEquals(alone.status(), guided.status());
             assertEquals(alone.route().end(), guided.route().end());
             assertFalse(guided.coarse());

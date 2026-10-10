@@ -66,6 +66,20 @@ public final class WindowSearch {
         return run(terrain, request, start, Exits.NONE, started);
     }
 
+    /**
+     * The exit phase of {@link #search} alone, for a caller that has already run the direct phase:
+     * any exit when the goal cannot overlap the window, else only exits next to uncaptured terrain.
+     */
+    public SearchResult searchOnward(Terrain terrain, SearchRequest request) {
+        long started = nanoClock.getAsLong();
+        Start start = snap(terrain, request.x(), request.y(), request.z(), request.window());
+        if (start == null) {
+            return startFailure(terrain, request, started);
+        }
+        Exits exits = request.goal().mayOverlap(request.window()) ? Exits.UNKNOWN_ONLY : Exits.ANY;
+        return run(terrain, request, start, exits, started);
+    }
+
     private SearchResult startFailure(Terrain terrain, SearchRequest request, long started) {
         if (terrain.surfaces((int) Math.floor(request.x()), (int) Math.floor(request.z())) == null) {
             return SearchResult.failed(SearchResult.Status.UNCAPTURED_START, 0, nanoClock.getAsLong() - started);

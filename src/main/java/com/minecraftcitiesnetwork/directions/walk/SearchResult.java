@@ -3,9 +3,11 @@ package com.minecraftcitiesnetwork.directions.walk;
 /**
  * @param route the route for COMPLETE and PARTIAL, otherwise null
  * @param cost   walking cost of the route
- * @param coarse whether the route leads to a waypoint chosen with the coarse graph
+ * @param coarse      whether the route leads to a waypoint chosen with the coarse graph
+ * @param coarseNanos time spent planning over the coarse graph; 0 when the graph was not consulted
  */
-public record SearchResult(Status status, Route route, double cost, int expansions, long nanos, boolean coarse) {
+public record SearchResult(Status status, Route route, double cost, int expansions, long nanos, boolean coarse,
+                           long coarseNanos) {
     public enum Status {
         /** The route reaches the goal. */
         COMPLETE,
@@ -21,8 +23,17 @@ public record SearchResult(Status status, Route route, double cost, int expansio
         UNCAPTURED_START
     }
 
+    public SearchResult(Status status, Route route, double cost, int expansions, long nanos, boolean coarse) {
+        this(status, route, cost, expansions, nanos, coarse, 0L);
+    }
+
     public SearchResult(Status status, Route route, double cost, int expansions, long nanos) {
         this(status, route, cost, expansions, nanos, false);
+    }
+
+    /** This result, reporting the given coarse planning time. */
+    public SearchResult withCoarseNanos(long nanos) {
+        return new SearchResult(status, route, cost, expansions, this.nanos, coarse, nanos);
     }
 
     public boolean found() {
