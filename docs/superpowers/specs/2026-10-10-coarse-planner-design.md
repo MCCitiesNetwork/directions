@@ -159,7 +159,7 @@ Components are computed on the pool thread; `replace` is quick and synchronised.
 
 ## 7. Persistence
 
-One file per world: `plugins/Directions/walk/<world UUID>.coarse`, gzip-compressed, little-endian:
+One file per world: `plugins/Directions/walk/<world UUID>.coarse`, gzip-compressed, big-endian (Java `DataOutput`):
 
 ```
 magic "DCG1", version 1
@@ -168,6 +168,7 @@ progress: region x, region z, row (ints; −1, −1, −1 when no build has star
 node count (int)
 per node: chunk x, chunk z (ints); representative x, y, z (ints); minY, maxY (shorts);
           edge count (byte); per edge: chunk x, chunk z, representative x, y, z (ints)
+empty-chunk count (int); per empty chunk: chunk x, chunk z (ints)
 ```
 
 About 60 bytes per node before compression; Reveille's million-odd nodes come to roughly 60 MB raw
