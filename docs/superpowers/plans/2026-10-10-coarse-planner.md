@@ -330,7 +330,7 @@ git commit -m "feat(coarse): waypoint choice and the coarse plan for one window"
 - Consumes: `WindowSearch`, `CoarsePlanner`, `CoarseGraph`.
 - Produces: `final class GuidedSearch` with `GuidedSearch(WindowSearch window, WalkRules rules)` and
   `SearchResult search(Terrain terrain, SearchRequest request, CoarseGraph graph, int coarseMaxExpansions)` implementing §4 steps 1 to 3 exactly; `graph` may be null. A result produced through a waypoint has `coarse == true`, status `PARTIAL`, and `route.endEstimate() == plan.remaining()`.
-  `WalkSimulation.walk(City city, int windowRadius, double startX, double startZ, Goal goal, double seconds, boolean coarse)`: when `coarse`, the graph is built for the city over x −200..1200, z −900..900 with `ChunkComponents` and `ChunkEdges` before the walk, and every search goes through `GuidedSearch`. `Report` gains `int guidedRoutes`, `double minZ` and `double maxX` (the walker's extremes over the whole walk).
+  `WalkSimulation.walk(City city, int windowRadius, double startX, double startZ, Goal goal, double seconds, boolean coarse)`: when `coarse`, the graph is built for the city over x −200..1200, z −900..900 with `ChunkComponents` and `ChunkEdges` before the walk, and every search goes through `GuidedSearch`. `Report` gains `int guidedRoutes` and `List<double[]> trail`, the walker's (x, z) sampled once per simulated second; tests derive extremes from it.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -344,8 +344,8 @@ class GuidedSearchTest {
 // RouteTest addition
 @Test void asPartialKeepsCellsAndSetsTheEstimate()
 // GuideSimulationTest changes: every existing test also runs with coarse = true (same expectations), plus
-@Test void withTheGraphTheRiverWalkerHeadsForTheBridge()        // RIVER_WITH_BRIDGE, FULL_WINDOW, coarse: arrived, reversals 0, report.minZ() >= −20
-@Test void withTheGraphTheDeadEndIsNeverEntered()                // DEAD_END_WITH_BRANCH, coarse: reversals 0, report.maxX() < 150, report.z() >= 200
+@Test void withTheGraphTheRiverWalkerHeadsForTheBridge()        // RIVER_WITH_BRIDGE, FULL_WINDOW, coarse: arrived, reversals 0, min z over the trail >= −20
+@Test void withTheGraphTheDeadEndIsNeverEntered()                // DEAD_END_WITH_BRANCH, coarse, goal PointGoal(1000, 64, 204, 3, false) on the parallel road (FAR_EAST lies inside buildings there, so the graph has no goal node and the walk would fall back): arrived, reversals 0, max x over trail samples with z < 100 is below 150
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
