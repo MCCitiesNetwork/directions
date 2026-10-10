@@ -46,6 +46,14 @@ walking-paths:
   trail-refresh-ticks: 10
   pulse-step: 4
   arrow-look-ahead: 6
+  # Whole-world routing: a coarse graph of the walkable world, built in the background with
+  # /directions walk build, so routes can span unloaded terrain.
+  coarse:
+    enabled: true
+    # Chunks read per tick while building (1-32).
+    build-chunks-per-tick: 4
+    # Search limit for one whole-world route (1000-1000000).
+    max-expansions: 50000
   particles:
     trail: { type: DUST, color: "#5BC0EB", size: 1.0 }
     pulse: { type: DUST, color: "#FFFFFF", size: 1.4 }

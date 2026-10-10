@@ -59,4 +59,34 @@ class WalkSettingsParserTest {
         assertEquals(48.0, d.tuning().extendDistance());
         assertEquals(2000L, d.tuning().cooldownMillis());
     }
+
+    @Test
+    void coarseDefaultsApply() {
+        List<String> warnings = new ArrayList<>();
+        WalkSettings settings = WalkSettingsParser.parse(new ConfigLoader.WalkingPathsSection(), warnings::add);
+        assertEquals(WalkSettings.CoarseSettings.DEFAULTS, settings.coarse());
+        assertTrue(warnings.isEmpty(), warnings.toString());
+    }
+
+    @Test
+    void coarseBuildRateOutOfRangeFallsBack() {
+        ConfigLoader.WalkingPathsSection section = new ConfigLoader.WalkingPathsSection();
+        section.coarse.buildChunksPerTick = 0;
+        List<String> warnings = new ArrayList<>();
+        WalkSettings settings = WalkSettingsParser.parse(section, warnings::add);
+        assertEquals(4, settings.coarse().buildChunksPerTick());
+        assertEquals(1, warnings.size());
+        assertTrue(warnings.get(0).contains("walking-paths.coarse.build-chunks-per-tick"), warnings.get(0));
+    }
+
+    @Test
+    void coarseExpansionsOutOfRangeFallsBack() {
+        ConfigLoader.WalkingPathsSection section = new ConfigLoader.WalkingPathsSection();
+        section.coarse.maxExpansions = 10;
+        List<String> warnings = new ArrayList<>();
+        WalkSettings settings = WalkSettingsParser.parse(section, warnings::add);
+        assertEquals(50_000, settings.coarse().maxExpansions());
+        assertEquals(1, warnings.size());
+        assertTrue(warnings.get(0).contains("walking-paths.coarse.max-expansions"), warnings.get(0));
+    }
 }

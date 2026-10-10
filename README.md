@@ -43,8 +43,12 @@ destination, and the whole way for `/gps` and `/compass`. Rides between stops ge
   you move.
 
 Configure it under `walking-paths:` in `config.yml`; `enabled: false` restores the plain arrow.
-Existing installations need two new lang keys, `walk.no-route` and `walk.debug-disabled`; delete
-`lang.yml` to regenerate it, or copy them from the bundled file.
+Whole-world routing is set under `walking-paths.coarse:` (`enabled`, `build-chunks-per-tick`,
+`max-expansions`).
+Existing installations need new lang keys, `walk.no-route`, `walk.debug-disabled` and the eight
+`walk.build-*` keys (`build-started`, `build-resumed`, `build-stopped`, `build-done`,
+`build-running`, `build-no-world`, `build-disabled`, `build-none`); delete `lang.yml` to
+regenerate it, or copy them from the bundled file.
 
 ## Building
 `./gradlew shadowJar`

@@ -349,6 +349,18 @@ public class ConfigLoader {
         public double arrowLookAhead = 6;
         @Setting("particles")
         public ParticlesSection particles = new ParticlesSection();
+        @Setting("coarse")
+        public CoarseSection coarse = new CoarseSection();
+    }
+
+    @ConfigSerializable
+    public static final class CoarseSection {
+        @Setting("enabled")
+        public boolean enabled = true;
+        @Setting("build-chunks-per-tick")
+        public int buildChunksPerTick = 4;
+        @Setting("max-expansions")
+        public int maxExpansions = 50_000;
     }
 
     @ConfigSerializable

@@ -37,7 +37,16 @@ public final class WalkSettingsParser {
                 doubleIn(warn, "arrow-look-ahead", s.arrowLookAhead, 1, 32, d.arrowLookAhead()),
                 particle(particles.trail, d.trailParticle()),
                 particle(particles.pulse, d.pulseParticle()),
-                particle(particles.end, d.endParticle()));
+                particle(particles.end, d.endParticle()),
+                coarse(s.coarse == null ? new ConfigLoader.CoarseSection() : s.coarse, warn));
+    }
+
+    private static WalkSettings.CoarseSettings coarse(ConfigLoader.CoarseSection c, Consumer<String> warn) {
+        WalkSettings.CoarseSettings d = WalkSettings.CoarseSettings.DEFAULTS;
+        return new WalkSettings.CoarseSettings(
+                c.enabled,
+                intIn(warn, "coarse.build-chunks-per-tick", c.buildChunksPerTick, 1, 32, d.buildChunksPerTick()),
+                intIn(warn, "coarse.max-expansions", c.maxExpansions, 1_000, 1_000_000, d.maxExpansions()));
     }
 
     private static int intIn(Consumer<String> warn, String key, int value, int min, int max, int fallback) {

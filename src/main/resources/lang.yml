@@ -53,3 +53,11 @@ navigation:
 walk:
   debug-disabled: "<prefix><yellow>Walking paths are disabled (walking-paths.enabled: false)."
   no-route: "<prefix><yellow>No walking route found nearby, follow the arrow."
+  build-started: "<prefix><green>Building the walking graph of <world> (<chunks> chunks). Progress: /directions debug walk"
+  build-resumed: "<prefix><green>Resuming the walking graph of <world> (<chunks> chunks left)."
+  build-stopped: "<prefix><yellow>Walking graph build stopped; progress saved."
+  build-done: "<prefix><green>Walking graph of <world> complete (<chunks> chunks)."
+  build-running: "<prefix><yellow>A walking graph build is already running; use /directions walk build stop first."
+  build-no-world: "<prefix><red>No world named <world>."
+  build-disabled: "<prefix><yellow>Whole-world routing is disabled (walking-paths.coarse.enabled: false)."
+  build-none: "<prefix><yellow>No walking graph build is running."

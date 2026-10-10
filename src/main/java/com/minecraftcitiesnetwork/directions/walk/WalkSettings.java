@@ -22,13 +22,20 @@ public record WalkSettings(
         double arrowLookAhead,
         ParticleSpec trailParticle,
         ParticleSpec pulseParticle,
-        ParticleSpec endParticle
+        ParticleSpec endParticle,
+        CoarseSettings coarse
 ) {
     public static final WalkSettings DEFAULTS = new WalkSettings(
             true, 80, 50, 200_000, 6, 1500, 4096, 3, 2.5, 2.0, 1.5, 48, 6, 2000, 40, 10, 4, 6,
             new ParticleSpec("DUST", "#5BC0EB", 1.0),
             new ParticleSpec("DUST", "#FFFFFF", 1.4),
-            new ParticleSpec("HAPPY_VILLAGER", "", 1.0));
+            new ParticleSpec("HAPPY_VILLAGER", "", 1.0),
+            CoarseSettings.DEFAULTS);
+
+    /** Whole-world routing: the coarse graph build rate and its search limit. */
+    public record CoarseSettings(boolean enabled, int buildChunksPerTick, int maxExpansions) {
+        public static final CoarseSettings DEFAULTS = new CoarseSettings(true, 4, 50_000);
+    }
 
     public WalkerProfile walker() {
         return new WalkerProfile(maxDrop, waterCost, climbCost, doorCost);
