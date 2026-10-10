@@ -180,6 +180,8 @@ public final class WalkSearchService {
             Terrain terrain = store.terrain(world);
             ChunkEdges.Linked linked;
             try {
+                // Again here: a link of a neighbour may have cached this chunk from its old terrain meanwhile.
+                cache.invalidate(chunkX, chunkZ);
                 List<Component> components = cache.of(terrain, chunkX, chunkZ, rules);
                 linked = ChunkEdges.compute(terrain, rules, chunkX, chunkZ, components,
                         (x, z) -> cache.of(terrain, x, z, rules));
