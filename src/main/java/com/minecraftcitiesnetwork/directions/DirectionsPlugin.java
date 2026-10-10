@@ -10,6 +10,7 @@ import com.minecraftcitiesnetwork.directions.config.ConfigLoader;
 import com.minecraftcitiesnetwork.directions.graph.TransitGraph;
 import com.minecraftcitiesnetwork.directions.i18n.LangService;
 import com.minecraftcitiesnetwork.directions.navigation.NavigationService;
+import com.minecraftcitiesnetwork.directions.walk.bukkit.CoarseBuilder;
 import com.minecraftcitiesnetwork.directions.walk.bukkit.CoarseGraphs;
 import com.minecraftcitiesnetwork.directions.walk.bukkit.WalkSearchService;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -21,6 +22,7 @@ public class DirectionsPlugin extends JavaPlugin {
     private NavigationService navigationService;
     private WalkSearchService walkService;
     private CoarseGraphs coarseGraphs;
+    private CoarseBuilder coarseBuilder;
     private LangService lang;
 
     @Override
@@ -29,6 +31,7 @@ public class DirectionsPlugin extends JavaPlugin {
         this.lang.load();
         this.coarseGraphs = new CoarseGraphs(this);
         this.coarseGraphs.start();
+        this.coarseBuilder = new CoarseBuilder(this, coarseGraphs);
         reloadDirectionsData();
         this.navigationService = new NavigationService(this);
         this.navigationService.start();
@@ -47,6 +50,9 @@ public class DirectionsPlugin extends JavaPlugin {
             navigationService.stop();
         }
         stopWalking();
+        if (coarseBuilder != null) {
+            coarseBuilder.shutdown();
+        }
         if (coarseGraphs != null) {
             coarseGraphs.stop();
         }
@@ -67,6 +73,7 @@ public class DirectionsPlugin extends JavaPlugin {
         if (navigationService != null) {
             navigationService.dropGuides();
         }
+        coarseBuilder.configure(loadedData.walk());
         getLogger().info("Loaded " + loadedData.stopsById().size() + " stops and " + loadedData.lines().size() + " lines.");
     }
 
@@ -100,6 +107,14 @@ public class DirectionsPlugin extends JavaPlugin {
     /** Null when {@code walking-paths.enabled} is false. */
     public @Nullable WalkSearchService getWalkService() {
         return walkService;
+    }
+
+    public CoarseBuilder getCoarseBuilder() {
+        return coarseBuilder;
+    }
+
+    public CoarseGraphs getCoarseGraphs() {
+        return coarseGraphs;
     }
 
     public LangService getLang() {

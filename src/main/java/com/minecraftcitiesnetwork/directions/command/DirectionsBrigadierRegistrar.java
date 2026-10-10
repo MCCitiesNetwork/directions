@@ -8,8 +8,12 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import com.minecraftcitiesnetwork.directions.DirectionsPlugin;
+import org.bukkit.Bukkit;
+import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+
+import java.util.Locale;
 
 public final class DirectionsBrigadierRegistrar {
     private final DirectionsPlugin plugin;
@@ -34,6 +38,22 @@ public final class DirectionsBrigadierRegistrar {
                             .requires(source -> source.getSender().hasPermission("directions.debug"))
                             .then(Commands.literal("walk")
                                     .executes(this::debugWalk)))
+                    .then(Commands.literal("walk")
+                            .requires(source -> source.getSender().hasPermission("directions.debug"))
+                            .then(Commands.literal("build")
+                                    .then(Commands.literal("stop")
+                                            .executes(this::walkBuildStop))
+                                    .then(Commands.argument("world", StringArgumentType.word())
+                                            .suggests((context, builder) -> {
+                                                String typed = builder.getRemainingLowerCase();
+                                                for (World world : Bukkit.getWorlds()) {
+                                                    if (world.getName().toLowerCase(Locale.ROOT).startsWith(typed)) {
+                                                        builder.suggest(world.getName());
+                                                    }
+                                                }
+                                                return builder.buildFuture();
+                                            })
+                                            .executes(this::walkBuild))))
                     .then(Commands.argument("region", StringArgumentType.word())
                             .requires(source -> source.getSender().hasPermission("directions.use"))
                             .suggests((context, builder) -> {
@@ -79,6 +99,16 @@ public final class DirectionsBrigadierRegistrar {
 
     private int reload(CommandContext<CommandSourceStack> context) {
         command.reload(context.getSource().getSender());
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int walkBuild(CommandContext<CommandSourceStack> context) {
+        command.walkBuild(context.getSource().getSender(), StringArgumentType.getString(context, "world"));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int walkBuildStop(CommandContext<CommandSourceStack> context) {
+        command.walkBuildStop(context.getSource().getSender());
         return Command.SINGLE_SUCCESS;
     }
 

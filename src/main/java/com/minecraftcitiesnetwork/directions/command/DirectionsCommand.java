@@ -15,10 +15,13 @@ import com.minecraftcitiesnetwork.directions.navigation.LegPlanner;
 import com.minecraftcitiesnetwork.directions.navigation.Waypoint;
 import com.minecraftcitiesnetwork.directions.resolver.DestinationResolver;
 import com.minecraftcitiesnetwork.directions.resolver.PlayerPositionResolver;
+import com.minecraftcitiesnetwork.directions.walk.bukkit.CoarseBuilder;
 import com.minecraftcitiesnetwork.directions.walk.bukkit.WalkSearchService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -62,10 +65,45 @@ public class DirectionsCommand {
         WalkSearchService service = plugin.getWalkService();
         if (service == null) {
             lang.send(sender, "walk.debug-disabled", lang.placeholderRaw("prefix", lang.raw("prefix")));
+        } else {
+            for (String line : service.stats().describe(service.cachedChunks())) {
+                sender.sendMessage(Component.text(line));
+            }
+        }
+        List<String> lines = new ArrayList<>(plugin.getCoarseGraphs().describe());
+        lines.addAll(plugin.getCoarseBuilder().describe());
+        for (String line : lines) {
+            sender.sendMessage(Component.text(line));
+        }
+    }
+
+    public void walkBuild(CommandSender sender, String worldName) {
+        TagResolver prefix = lang.placeholderRaw("prefix", lang.raw("prefix"));
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) {
+            lang.send(sender, "walk.build-no-world", prefix, lang.placeholder("world", worldName));
             return;
         }
-        for (String line : service.stats().describe(service.cachedChunks())) {
-            sender.sendMessage(Component.text(line));
+        CoarseBuilder builder = plugin.getCoarseBuilder();
+        switch (builder.start(world, sender)) {
+            case STARTED -> lang.send(sender, "walk.build-started", prefix,
+                    lang.placeholder("world", world.getName()),
+                    lang.placeholder("chunks", String.valueOf(builder.total())));
+            case RESUMED -> lang.send(sender, "walk.build-resumed", prefix,
+                    lang.placeholder("world", world.getName()),
+                    lang.placeholder("chunks", String.valueOf(builder.total())));
+            case ALREADY_RUNNING -> lang.send(sender, "walk.build-running", prefix);
+            case NO_WORLD -> lang.send(sender, "walk.build-no-world", prefix, lang.placeholder("world", worldName));
+            case DISABLED -> lang.send(sender, "walk.build-disabled", prefix);
+        }
+    }
+
+    public void walkBuildStop(CommandSender sender) {
+        TagResolver prefix = lang.placeholderRaw("prefix", lang.raw("prefix"));
+        if (plugin.getCoarseBuilder().stop()) {
+            lang.send(sender, "walk.build-stopped", prefix);
+        } else {
+            lang.send(sender, "walk.build-none", prefix);
         }
     }
 
