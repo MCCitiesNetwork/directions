@@ -11,7 +11,6 @@ import com.minecraftcitiesnetwork.directions.resolver.DestinationResolver;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
-import java.util.List;
 import java.util.Locale;
 
 public class GpsCommand {
@@ -74,7 +73,7 @@ public class GpsCommand {
     }
 
     private void startDirectNavigation(Player player, Waypoint destination) {
-        plugin.getNavigationService().startGpsNavigation(player, List.of(destination));
+        plugin.getNavigationService().startGpsNavigation(player, destination);
         lang.send(player, "gps.started",
                 lang.placeholderRaw("prefix", lang.raw("prefix")),
                 lang.waypointLabel("destination", plugin.getLoadedData(), destination));

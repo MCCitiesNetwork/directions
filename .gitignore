@@ -27,3 +27,6 @@ replay_pid*
 
 # workspace files
 .code-workspace
+
+# Dev server (./gradlew runServer)
+run/

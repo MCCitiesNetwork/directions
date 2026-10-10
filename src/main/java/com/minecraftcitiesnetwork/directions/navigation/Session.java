@@ -1,6 +1,7 @@
 package com.minecraftcitiesnetwork.directions.navigation;
 
 import com.minecraftcitiesnetwork.directions.DirectionsPlugin;
+import com.minecraftcitiesnetwork.directions.walk.bukkit.WalkGuide;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.ArmorStand;
 import org.jetbrains.annotations.Nullable;
@@ -11,18 +12,20 @@ import java.util.UUID;
 final class Session implements SessionView {
     private final DirectionsPlugin plugin;
     private final UUID playerId;
-    private final List<Waypoint> waypoints;
+    private final List<Leg> legs;
     private int index;
     private final List<ArmorStand> arrowStands;
     private final BossBar bossBar;
     private final boolean gps;
     private double legStartDistance;
     private int upcomingHintSentForIndex;
+    private @Nullable WalkGuide guide;
+    private int guideLeg = -1;
 
-    Session(DirectionsPlugin plugin, UUID playerId, List<Waypoint> waypoints, int index, List<ArmorStand> arrowStands, BossBar bossBar, boolean gps) {
+    Session(DirectionsPlugin plugin, UUID playerId, List<Leg> legs, int index, List<ArmorStand> arrowStands, BossBar bossBar, boolean gps) {
         this.plugin = plugin;
         this.playerId = playerId;
-        this.waypoints = waypoints;
+        this.legs = List.copyOf(legs);
         this.index = index;
         this.arrowStands = arrowStands;
         this.bossBar = bossBar;
@@ -75,39 +78,58 @@ final class Session implements SessionView {
         this.upcomingHintSentForIndex = idx;
     }
 
+    @Nullable Leg currentLeg() {
+        return legAt(index);
+    }
+
     @Nullable Waypoint currentWaypoint() {
-        if (index < 0 || index >= waypoints.size()) {
-            return null;
-        }
-        return waypoints.get(index);
+        return targetAt(index);
     }
 
     @Nullable Waypoint nextWaypoint() {
-        int nextIdx = index + 1;
-        if (nextIdx < 0 || nextIdx >= waypoints.size()) {
-            return null;
-        }
-        return waypoints.get(nextIdx);
+        return targetAt(index + 1);
     }
 
     @Nullable Waypoint nextWaypointAfterNext() {
-        int idx = index + 2;
-        if (idx < 0 || idx >= waypoints.size()) {
-            return null;
-        }
-        return waypoints.get(idx);
+        return targetAt(index + 2);
     }
 
     @Override
     public @Nullable Waypoint previousWaypoint() {
-        int prevIdx = index - 1;
-        if (prevIdx < 0 || prevIdx >= waypoints.size()) {
-            return null;
-        }
-        return waypoints.get(prevIdx);
+        return targetAt(index - 1);
+    }
+
+    @Nullable WalkGuide guide() {
+        return guide;
+    }
+
+    int guideLeg() {
+        return guideLeg;
+    }
+
+    void setGuide(WalkGuide guide, int leg) {
+        this.guide = guide;
+        this.guideLeg = leg;
+    }
+
+    void clearGuide() {
+        this.guide = null;
+        this.guideLeg = -1;
     }
 
     void advance() {
         index++;
+    }
+
+    private @Nullable Leg legAt(int i) {
+        if (i < 0 || i >= legs.size()) {
+            return null;
+        }
+        return legs.get(i);
+    }
+
+    private @Nullable Waypoint targetAt(int i) {
+        Leg leg = legAt(i);
+        return leg == null ? null : leg.target();
     }
 }

@@ -3,6 +3,7 @@ package com.minecraftcitiesnetwork.directions.config;
 import com.minecraftcitiesnetwork.directions.model.CostModel;
 import com.minecraftcitiesnetwork.directions.model.Line;
 import com.minecraftcitiesnetwork.directions.model.Stop;
+import com.minecraftcitiesnetwork.directions.walk.WalkSettings;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -27,7 +28,8 @@ class LoadedDataDisplayNameTest {
                 Map.of("reveille_metro_line_churchill", "Churchill Line"),
                 Map.of("rev-train-capital", "Capital Station"),
                 List.of(new Line("reveille_metro_line_churchill", "train", CostModel.DISTANCE, List.of("rev-train-capital"))),
-                Map.of("rev-train-capital", new Stop("rev-train-capital", "world", 0, 0, Set.of("reveille_metro_line_churchill")))
+                Map.of("rev-train-capital", new Stop("rev-train-capital", "world", 0, 0, Set.of("reveille_metro_line_churchill"))),
+                WalkSettings.DEFAULTS
         );
 
         assertEquals("Churchill Line", data.displayLine("reveille_metro_line_churchill"));
@@ -49,7 +51,8 @@ class LoadedDataDisplayNameTest {
                 Map.of(),
                 Map.of(),
                 List.of(),
-                Map.of()
+                Map.of(),
+                WalkSettings.DEFAULTS
         );
 
         assertEquals("Reveille Metro Line Bondi", data.displayLine("reveille_metro_line_bondi"));

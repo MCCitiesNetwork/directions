@@ -49,3 +49,7 @@ navigation:
   next-destination: "<prefix><white>Now walk to <stop>."
   upcoming-destination: "<prefix><white>Get ready to walk to <stop>."
   arrived: "<prefix><green>You have arrived at <destination>."
+
+walk:
+  debug-disabled: "<prefix><yellow>Walking paths are disabled (walking-paths.enabled: false)."
+  no-route: "<prefix><yellow>No walking route found nearby, follow the arrow."

@@ -1,10 +1,11 @@
 plugins {
     java
     id("com.gradleup.shadow") version "8.3.5"
+    id("xyz.jpenilla.run-paper") version "2.3.1"
 }
 
 group = "com.minecraftcitiesnetwork"
-version = "2.1.0"
+version = "2.2.0"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(21))
@@ -48,6 +49,17 @@ tasks {
 
     test {
         useJUnitPlatform()
+    }
+
+    // `./gradlew runServer` starts Paper 1.21.8 in run/ with WorldGuard and WorldEdit.
+    runServer {
+        minecraftVersion("1.21.8")
+        runDirectory.set(file("run"))
+        downloadPlugins {
+            // Direct Bukkit builds: Modrinth publishes Fabric jars under the same version numbers.
+            url("https://cdn.modrinth.com/data/1u6JkXh5/versions/Jk1z2u7n/worldedit-bukkit-7.3.16.jar")
+            url("https://cdn.modrinth.com/data/DKY9btbd/versions/PO4MKx7e/worldguard-bukkit-7.0.14-dist.jar")
+        }
     }
     
     processResources {

@@ -8,6 +8,7 @@ Transit directions for Paper Minecraft servers, using WorldGuard regions as stop
 - `/directions start at <x> <y> <z>` - start directions to exact coordinates
 - `/directions stop` - stops active navigation
 - `/directions reload` - reload configuration files (requires `directions.reload`)
+- `/directions debug walk` - walking-search statistics (requires directions.debug)
 
 ## Configuration
 - `transfer-penalty`: extra cost for transit hops
@@ -21,8 +22,35 @@ Transit directions for Paper Minecraft servers, using WorldGuard regions as stop
   - `shared-mode-only` (recommended)
   - `strict`: allows walking edges regardless of stop mode
 
+## Walking trails
+Every walking part of a trip gets a particle trail along the real walking route: from where you
+start to the first stop, between stops when a transfer is on foot, from the last stop to your
+destination, and the whole way for `/gps` and `/compass`. Rides between stops get no trail.
+
+- The trail is visible only to the navigating player and covers the next 40 blocks ahead; a
+  brighter pulse travels along it toward the goal. The arrow points along the trail.
+- Routes are computed from terrain that is already loaded around you, in a window of about 160 ×
+  160 blocks, and extended as you walk, so a trip can span the whole world. Chunks are never
+  loaded for this.
+- The walker steps up one block, drops up to three, swims, climbs ladders and vines, and opens
+  doors and gates. It never crosses fences, walls, panes, lava, fire, cactus or magma.
+- While a route is only partly known, the boss bar shows `~` before the distance (add `<approx>`
+  to a custom `bossbar-format` to get this).
+- When the route is extended or re-planned, the new route keeps you going the way you were headed
+  unless turning back saves a lot. The search only sees about 80 blocks ahead, so along a river or
+  wall it may follow the bank for a while before finding the crossing.
+- If no route can be found nearby, you get one message and the straight arrow, and it retries as
+  you move.
+
+Configure it under `walking-paths:` in `config.yml`; `enabled: false` restores the plain arrow.
+Existing installations need two new lang keys, `walk.no-route` and `walk.debug-disabled`; delete
+`lang.yml` to regenerate it, or copy them from the bundled file.
+
 ## Building
 `./gradlew shadowJar`
+
+## Testing
+- ./gradlew runServer - a Paper 1.21.8 dev server in run/ with WorldGuard and WorldEdit.
 
 ## Troubleshooting
 - If command says region not found, verify that the region exists in player's current world.

@@ -8,12 +8,48 @@ next-stop-notify-distance: 15
 departure-clearance-radius: 5
 # Suggested range: 3-15. Distance to a /directions start at <x> <z> coordinate destination.
 coordinate-arrival-radius: 5
-bossbar-format: "Next: <stop>  <remaining>m"
-gps-bossbar-format: "Destination: <stop>  <remaining>m"
+bossbar-format: "Next: <stop>  <approx><remaining>m"
+gps-bossbar-format: "Destination: <stop>  <approx><remaining>m"
 
 # strict: allow walking between any nearby stops
 # shared-mode-only: only allow walking edges when both stops share bus/train mode
 walking-transfer-policy: shared-mode-only
+
+# Walking trails: a particle trail along the real walking route for every walking part of a trip
+# (to the first stop, between stops, to the destination, /gps and /compass). Ride legs get none.
+# Routes are computed from loaded terrain around the player only; chunks are never loaded for this.
+walking-paths:
+  enabled: true
+  # Search window: blocks each way from the player (the window is twice this across). Capped by
+  # the server view distance. 16-160.
+  window-radius: 80
+  time-budget-ms: 50
+  max-expansions: 200000
+  # Chunk capture: snapshots taken on the main thread per tick, how long a search waits for the
+  # chunks around a player to be captured, and how many decoded chunks to keep.
+  snapshots-per-tick: 6
+  capture-wait-ms: 1500
+  cache-max-chunks: 4096
+  # Walker: longest drop (0-5) and how much slower water, ladders and doors are (>= 1).
+  max-drop: 3
+  water-cost: 2.5
+  climb-cost: 2.0
+  door-cost: 1.5
+  # Re-planning: extend a partial route this many blocks before its end; re-plan when this far off
+  # the route; at most one re-plan per cooldown (except when the route gets blocked).
+  extend-distance: 48
+  off-route-distance: 6
+  replan-cooldown-ms: 2000
+  # Trail: cells drawn ahead of the player, redraw interval, how fast the bright pulse travels,
+  # and how far ahead along the route the arrow points.
+  trail-length: 40
+  trail-refresh-ticks: 10
+  pulse-step: 4
+  arrow-look-ahead: 6
+  particles:
+    trail: { type: DUST, color: "#5BC0EB", size: 1.0 }
+    pulse: { type: DUST, color: "#FFFFFF", size: 1.4 }
+    end: { type: HAPPY_VILLAGER }
 
 # Demo network:
 # - Replace these IDs with your own WorldGuard region IDs.

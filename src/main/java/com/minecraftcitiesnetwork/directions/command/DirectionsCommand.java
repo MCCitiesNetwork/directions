@@ -10,9 +10,13 @@ import com.minecraftcitiesnetwork.directions.graph.TransitGraph;
 import com.minecraftcitiesnetwork.directions.i18n.LangService;
 import com.minecraftcitiesnetwork.directions.model.RouteResult;
 import com.minecraftcitiesnetwork.directions.model.Stop;
+import com.minecraftcitiesnetwork.directions.navigation.Leg;
+import com.minecraftcitiesnetwork.directions.navigation.LegPlanner;
 import com.minecraftcitiesnetwork.directions.navigation.Waypoint;
 import com.minecraftcitiesnetwork.directions.resolver.DestinationResolver;
 import com.minecraftcitiesnetwork.directions.resolver.PlayerPositionResolver;
+import com.minecraftcitiesnetwork.directions.walk.bukkit.WalkSearchService;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
@@ -52,6 +56,17 @@ public class DirectionsCommand {
     public void reload(CommandSender sender) {
         plugin.reloadDirectionsData();
         lang.send(sender, "command.reloaded", lang.placeholderRaw("prefix", lang.raw("prefix")));
+    }
+
+    public void debugWalk(CommandSender sender) {
+        WalkSearchService service = plugin.getWalkService();
+        if (service == null) {
+            lang.send(sender, "walk.debug-disabled", lang.placeholderRaw("prefix", lang.raw("prefix")));
+            return;
+        }
+        for (String line : service.stats().describe(service.cachedChunks())) {
+            sender.sendMessage(Component.text(line));
+        }
     }
 
     public void stop(Player player) {
@@ -171,16 +186,16 @@ public class DirectionsCommand {
             return;
         }
 
-        List<Waypoint> navWaypoints = buildWaypoints(route.pathNodes(), finalWaypoint);
+        List<Leg> legs = LegPlanner.plan(route.pathNodes(), START_NODE, DEST_NODE, finalWaypoint, graph::isTransitHop);
 
         if (!hasTransitHop(route.pathNodes(), graph)) {
             sendDirectWalk(player, playerLoc, destX, destZ, finalWaypoint);
-            plugin.getNavigationService().startNavigation(player, List.of(finalWaypoint));
+            plugin.getNavigationService().startNavigation(player, List.of(Leg.walk(finalWaypoint)));
             sendStartedNavigation(player, finalWaypoint);
             return;
         }
 
-        plugin.getNavigationService().startNavigation(player, navWaypoints);
+        plugin.getNavigationService().startNavigation(player, legs);
         sendStartedNavigation(player, finalWaypoint);
         sendRoute(player, route.pathNodes(), graph, startResolution.fallbackUsed(), destinationFallback, finalWaypoint);
         sendSwitchToDirectHint(player, finalWaypoint);
@@ -330,7 +345,7 @@ public class DirectionsCommand {
     }
 
     private void startGpsFallback(Player player, Waypoint finalWaypoint) {
-        plugin.getNavigationService().startGpsNavigation(player, List.of(finalWaypoint));
+        plugin.getNavigationService().startGpsNavigation(player, finalWaypoint);
         lang.send(player, "directions.gps-fallback",
                 lang.placeholderRaw("prefix", lang.raw("prefix")),
                 lang.waypointLabel("destination", plugin.getLoadedData(), finalWaypoint));
@@ -348,20 +363,6 @@ public class DirectionsCommand {
 
     public RegionSuggestionService suggestions() {
         return suggestionService;
-    }
-
-    private static List<Waypoint> buildWaypoints(List<String> pathNodes, Waypoint finalWaypoint) {
-        List<Waypoint> waypoints = new ArrayList<>();
-        for (String node : pathNodes) {
-            if (node.equals(START_NODE) || node.equals(DEST_NODE)) {
-                continue;
-            }
-            waypoints.add(new Waypoint.Region(node));
-        }
-        if (waypoints.isEmpty() || !waypoints.getLast().equals(finalWaypoint)) {
-            waypoints.add(finalWaypoint);
-        }
-        return waypoints;
     }
 
 }

@@ -2,6 +2,12 @@ package com.minecraftcitiesnetwork.directions.navigation;
 
 import com.minecraftcitiesnetwork.directions.DirectionsPlugin;
 import com.minecraftcitiesnetwork.directions.i18n.LangService;
+import com.minecraftcitiesnetwork.directions.walk.Goal;
+import com.minecraftcitiesnetwork.directions.walk.bukkit.TrailRenderer;
+import com.minecraftcitiesnetwork.directions.walk.bukkit.TrailStyle;
+import com.minecraftcitiesnetwork.directions.walk.bukkit.WalkGoals;
+import com.minecraftcitiesnetwork.directions.walk.bukkit.WalkGuide;
+import com.minecraftcitiesnetwork.directions.walk.bukkit.WalkSearchService;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldguard.WorldGuard;
 import com.sk89q.worldguard.protection.managers.RegionManager;
@@ -26,6 +32,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Vector;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -48,6 +55,9 @@ public class NavigationService implements Listener {
     private final LangService lang;
     private final Map<UUID, Session> sessions = new HashMap<>();
     private BukkitTask task;
+    private long tickCounter;
+    private TrailRenderer trailRenderer;
+    private WalkSearchService trailRendererService;
 
     public NavigationService(DirectionsPlugin plugin) {
         this.plugin = plugin;
@@ -70,17 +80,18 @@ public class NavigationService implements Listener {
         sessions.clear();
     }
 
-    public void startNavigation(Player player, List<Waypoint> waypoints) {
-        startNavigation(player, waypoints, false);
+    public void startNavigation(Player player, List<Leg> legs) {
+        startNavigation(player, legs, false);
     }
 
-    public void startGpsNavigation(Player player, List<Waypoint> waypoints) {
-        startNavigation(player, waypoints, true);
+    /** Direct navigation (/gps, /compass, fallbacks): one walking leg to the destination. */
+    public void startGpsNavigation(Player player, Waypoint destination) {
+        startNavigation(player, List.of(Leg.walk(destination)), true);
     }
 
-    private void startNavigation(Player player, List<Waypoint> waypoints, boolean gps) {
+    private void startNavigation(Player player, List<Leg> legs, boolean gps) {
         stopNavigation(player);
-        if (waypoints.isEmpty()) {
+        if (legs.isEmpty()) {
             return;
         }
 
@@ -88,7 +99,7 @@ public class NavigationService implements Listener {
         bossBar.addPlayer(player);
 
         List<ArmorStand> arrowStands = new ArrayList<>();
-        Session session = new Session(plugin, player.getUniqueId(), waypoints, 0, arrowStands, bossBar, gps);
+        Session session = new Session(plugin, player.getUniqueId(), legs, 0, arrowStands, bossBar, gps);
         sessions.put(player.getUniqueId(), session);
         applyVisibility(session);
     }
@@ -117,6 +128,7 @@ public class NavigationService implements Listener {
     }
 
     private void tick() {
+        tickCounter++;
         for (Session session : new ArrayList<>(sessions.values())) {
             Player player = Bukkit.getPlayer(session.playerId());
             if (player == null || !player.isOnline()) {
@@ -174,9 +186,18 @@ public class NavigationService implements Listener {
             if (targetLoc == null) {
                 continue;
             }
+            WalkGuide guide = updateWalkGuide(session, player, regionManager);
+            Location arrowTarget = targetLoc;
+            double walkRemaining = -1;
+            boolean approximate = false;
+            if (guide != null && guide.visibleRoute() != null) {
+                arrowTarget = guide.arrowTarget(player);
+                walkRemaining = guide.remaining(player);
+                approximate = guide.approximate();
+            }
             maybeSendUpcomingStopHint(player, session, regionManager, currentTarget, targetLoc);
-            updateArrow(player, session, targetLoc);
-            updateBossbar(session, currentTarget, player.getLocation(), targetLoc);
+            updateArrow(player, session, arrowTarget);
+            updateBossbar(session, currentTarget, player.getLocation(), targetLoc, walkRemaining, approximate);
         }
     }
 
@@ -206,6 +227,46 @@ public class NavigationService implements Listener {
         };
     }
 
+    /** Keeps a walking guide on WALK legs (and none on RIDE legs), ticks it, and draws its trail. */
+    private @Nullable WalkGuide updateWalkGuide(Session session, Player player, RegionManager regionManager) {
+        WalkSearchService service = plugin.getWalkService();
+        Leg leg = session.currentLeg();
+        if (service == null || leg == null || leg.kind() != LegKind.WALK) {
+            session.clearGuide();
+            return null;
+        }
+        if (session.guide() == null || session.guideLeg() != session.index()) {
+            Goal goal = WalkGoals.forWaypoint(leg.target(), regionManager, plugin.getLoadedData());
+            if (goal == null) {
+                session.clearGuide();
+                return null;
+            }
+            session.setGuide(new WalkGuide(service, player.getWorld(), goal), session.index());
+        }
+        WalkGuide guide = session.guide();
+        guide.tick(player);
+        if (guide.takeNoRouteMessage()) {
+            lang.send(player, "walk.no-route", lang.placeholderRaw("prefix", lang.raw("prefix")));
+        }
+        trailRenderer(service).render(player, guide, tickCounter);
+        return guide;
+    }
+
+    private TrailRenderer trailRenderer(WalkSearchService service) {
+        if (trailRendererService != service) {
+            trailRenderer = new TrailRenderer(TrailStyle.from(service.settings(), plugin.getLogger()), service.settings());
+            trailRendererService = service;
+        }
+        return trailRenderer;
+    }
+
+    /** Forgets every walking guide; used when the search service is replaced by a reload. */
+    public void dropGuides() {
+        for (Session session : sessions.values()) {
+            session.clearGuide();
+        }
+    }
+
     private static void updateArrow(Player player, Session session, Location target) {
         Vector dir = target.toVector().subtract(player.getLocation().toVector());
         if (dir.lengthSquared() < 0.0001) {
@@ -224,8 +285,9 @@ public class NavigationService implements Listener {
         }
     }
 
-    private void updateBossbar(Session session, Waypoint waypoint, Location from, Location target) {
-        double remaining = switch (waypoint) {
+    private void updateBossbar(Session session, Waypoint waypoint, Location from, Location target,
+                               double walkRemaining, boolean approximate) {
+        double remaining = walkRemaining >= 0 ? walkRemaining : switch (waypoint) {
             case Waypoint.Coordinates coords -> ArrivalPolicy.distanceToCoordinate(from, coords);
             case Waypoint.Region region -> {
                 RegionManager regionManager = WorldGuard.getInstance().getPlatform().getRegionContainer()
@@ -251,6 +313,7 @@ public class NavigationService implements Listener {
                 : session.plugin().getLoadedData().bossbarFormat();
         session.bossBar().setTitle(LegacyComponentSerializer.legacySection().serialize(lang.deserialize(format,
                 lang.waypointLabel("stop", session.plugin().getLoadedData(), waypoint),
+                Placeholder.unparsed("approx", approximate ? "~" : ""),
                 Placeholder.unparsed("remaining", String.valueOf(Math.round(remaining))))));
     }
 
