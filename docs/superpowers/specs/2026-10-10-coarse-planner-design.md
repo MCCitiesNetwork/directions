@@ -167,6 +167,11 @@ A reload keeps the build running; it only re-reads `build-chunks-per-tick`. Disa
 saves and stops it.
 
 Reveille (measured): 259,968 existing chunks in 521 region files, about an hour at 4 chunks per tick.
+Measured again on 2026-10-10 on the dev copy: 50 minutes at about 80 chunks per second; of the
+241,469 chunks the headers listed, 110,349 were never generated and were skipped, and the graph
+holds 2,066,069 nodes in 132,531 chunks (15.6 per chunk). These counts include duplicate nodes from
+one-way drops (`ChunkComponents` floods reachability, not mutual connectivity; see the final fix
+report), so a corrected graph will differ.
 
 ## 6. Keeping it current
 
@@ -209,8 +214,18 @@ per node: chunk x, chunk z (ints); representative x, y, z (ints); minY, maxY (sh
 empty-chunk count (int); per empty chunk: chunk x, chunk z (ints)
 ```
 
-About 60 bytes per node before compression; Reveille's million-odd nodes come to roughly 60 MB raw
-and 15 MB compressed. Written to a temporary file and renamed into place, never partially. Loaded
+About 60 bytes per node before compression. Measured on Reveille's dev copy (983,863 nodes in
+66,933 chunks, the last save before the edge-count failure in the final fix report): 12.0 MB on disk
+(about 12 bytes per node), read in 0.8 s, written in 1.8 s; the whole graph of 2.07 million nodes
+projects to about 25 MB and 4 s. A save over 1 s is logged at INFO, and the plugin's disable waits up
+to 60 s for the last save.
+
+In memory, with every edge sharing its target node's `ComponentId` instance (`CoarseGraph.replace`
+and the reader canonicalise edges), a node costs about 106 bytes of heap: dropping the 983,863-node
+graph on the dev server freed 99 MB after a full GC, and a standalone load measured the same. The
+whole Reveille graph projects to about 210 MB (the server's class histogram showed 66 MB of
+`CoarseNode` and 66 MB of `ComponentId` for 2.07 million nodes). That is under the 300 MB line, so
+the node layout is not packed further. Written to a temporary file and renamed into place, never partially. Loaded
 asynchronously on plugin enable; searches run without the graph until it is in memory. A file that
 fails to read (bad magic, truncated, newer version, another world's file) is moved to
 `<world UUID>.coarse.bad` (replacing an older one), so the next save cannot overwrite it; one warning
