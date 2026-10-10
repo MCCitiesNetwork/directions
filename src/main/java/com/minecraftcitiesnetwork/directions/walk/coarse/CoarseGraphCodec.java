@@ -104,9 +104,11 @@ public final class CoarseGraphCodec {
         BuildProgress progress = new BuildProgress(data.readInt(), data.readInt(), data.readInt(), data.readBoolean());
 
         Map<Long, List<CoarseNode>> chunks = new HashMap<>();
+        // One instance per id: a node's own id and every edge to it share it, as in CoarseGraph.replace.
+        Map<ComponentId, ComponentId> ids = new HashMap<>();
         int nodeCount = data.readInt();
         for (int i = 0; i < nodeCount; i++) {
-            CoarseNode node = readNode(data);
+            CoarseNode node = readNode(data, ids);
             chunks.computeIfAbsent(ChunkKeys.key(node.id().chunkX(), node.id().chunkZ()), k -> new ArrayList<>())
                     .add(node);
         }
@@ -117,8 +119,8 @@ public final class CoarseGraphCodec {
         return new Loaded(world, CoarseGraph.of(chunks), progress);
     }
 
-    private static CoarseNode readNode(DataInputStream data) throws IOException {
-        ComponentId id = readId(data);
+    private static CoarseNode readNode(DataInputStream data, Map<ComponentId, ComponentId> ids) throws IOException {
+        ComponentId id = readId(data, ids);
         int minY = data.readShort();
         int maxY = data.readShort();
         int edgeCount = data.readByte();
@@ -127,12 +129,14 @@ public final class CoarseGraphCodec {
         }
         List<ComponentId> edges = new ArrayList<>(edgeCount);
         for (int i = 0; i < edgeCount; i++) {
-            edges.add(readId(data));
+            edges.add(readId(data, ids));
         }
         return new CoarseNode(id, minY, maxY, edges);
     }
 
-    private static ComponentId readId(DataInputStream data) throws IOException {
-        return new ComponentId(data.readInt(), data.readInt(), data.readInt(), data.readInt(), data.readInt());
+    private static ComponentId readId(DataInputStream data, Map<ComponentId, ComponentId> ids) throws IOException {
+        ComponentId id = new ComponentId(data.readInt(), data.readInt(), data.readInt(), data.readInt(), data.readInt());
+        ComponentId known = ids.putIfAbsent(id, id);
+        return known != null ? known : id;
     }
 }

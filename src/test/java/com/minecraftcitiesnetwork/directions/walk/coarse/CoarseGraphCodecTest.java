@@ -53,6 +53,7 @@ class CoarseGraphCodecTest {
         assertEquals(graph.snapshot(), loaded.graph().snapshot());
         assertTrue(loaded.graph().contains(9, 9));
         assertEquals(4, loaded.graph().size());
+        CoarseGraphTest.assertInterned(loaded.graph());
     }
 
     @Test

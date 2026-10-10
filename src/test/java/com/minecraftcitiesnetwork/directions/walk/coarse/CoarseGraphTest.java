@@ -3,6 +3,7 @@ package com.minecraftcitiesnetwork.directions.walk.coarse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -68,7 +69,35 @@ class CoarseGraphTest {
             }
             graph.replace(cx, cz, nodes, sides);
             assertSymmetric(graph);
+            assertInterned(graph);
         }
+    }
+
+    /** Every edge is the target node's own id instance, so an edge costs no ComponentId of its own. */
+    static void assertInterned(CoarseGraph graph) {
+        for (List<CoarseNode> nodes : graph.snapshot().values()) {
+            for (CoarseNode source : nodes) {
+                for (ComponentId target : source.edges()) {
+                    assertSame(graph.node(target).id(), target, "edge " + source.id() + " -> " + target);
+                }
+            }
+        }
+    }
+
+    @Test
+    void edgesShareTheTargetNodesIdInstance() {
+        CoarseGraph graph = new CoarseGraph();
+        graph.replace(1, 0, List.of(node(id(1, 0))), EnumSet.noneOf(Side.class));
+        graph.replace(0, 1, List.of(node(id(0, 1))), EnumSet.noneOf(Side.class));
+        // Equal but distinct instances, as a fresh computation produces them.
+        graph.replace(0, 0, List.of(node(id(0, 0), id(1, 0), id(0, 1))), EnumSet.of(Side.EAST, Side.SOUTH));
+        assertInterned(graph);
+        // Recomputing the middle chunk with only one side known keeps the other side's edge.
+        graph.replace(0, 0, List.of(node(id(0, 0), id(1, 0))), EnumSet.of(Side.EAST));
+        assertInterned(graph);
+        assertEquals(2, graph.node(id(0, 0)).edges().size());
+        graph.replace(1, 0, List.of(node(id(1, 0), id(0, 0))), EnumSet.of(Side.WEST));
+        assertInterned(graph);
     }
 
     private static void assertSymmetric(CoarseGraph graph) {

@@ -26,6 +26,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,6 +42,9 @@ import java.util.logging.Level;
 public final class CoarseGraphs implements Listener {
     private static final long SAVE_PERIOD_TICKS = 10 * 60 * 20L;
     private static final String EXTENSION = ".coarse";
+    /** How long the plugin's disable waits for the last saves; a whole-world graph takes seconds to write. */
+    private static final long STOP_WAIT_SECONDS = 60;
+    private static final long SLOW_SAVE_NANOS = 1_000_000_000L;
 
     /** One world's graph and its save state. The monitor serialises writes of this world's file. */
     private static final class WorldGraph {
@@ -91,8 +95,8 @@ public final class CoarseGraphs implements Listener {
             }
         });
         try {
-            if (!io.awaitTermination(5, TimeUnit.SECONDS)) {
-                plugin.getLogger().warning("Coarse graph saving did not finish within 5 seconds");
+            if (!io.awaitTermination(STOP_WAIT_SECONDS, TimeUnit.SECONDS)) {
+                plugin.getLogger().warning("Coarse graph saving did not finish within " + STOP_WAIT_SECONDS + " seconds");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -239,6 +243,7 @@ public final class CoarseGraphs implements Listener {
         synchronized (state) {
             Path target = file(world);
             Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+            long started = System.nanoTime();
             try {
                 // Progress read before the nodes, so it never claims rows whose nodes the copy lacks.
                 BuildProgress progress = state.progress;
@@ -251,6 +256,12 @@ public final class CoarseGraphs implements Listener {
                     Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
                 } catch (AtomicMoveNotSupportedException e) {
                     Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+                }
+                long nanos = System.nanoTime() - started;
+                if (nanos > SLOW_SAVE_NANOS) {
+                    plugin.getLogger().info(String.format(Locale.ROOT,
+                            "Saved coarse graph %s: %d nodes in %d chunks, %d KB, in %.1f s", target.getFileName(),
+                            copy.size(), copy.chunkCount(), Files.size(target) / 1024, nanos / 1e9));
                 }
             } catch (IOException | RuntimeException e) {
                 state.dirty = true;

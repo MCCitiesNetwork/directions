@@ -72,6 +72,9 @@ public class DirectionsCommand {
         }
         List<String> lines = new ArrayList<>(plugin.getCoarseGraphs().describe());
         lines.addAll(plugin.getCoarseBuilder().describe());
+        Runtime runtime = Runtime.getRuntime();
+        long usedMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
+        lines.add("Heap: used " + usedMb + " MB of " + runtime.maxMemory() / (1024 * 1024) + " MB");
         for (String line : lines) {
             sender.sendMessage(Component.text(line));
         }

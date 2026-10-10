@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class CoarseGraph {
     private final ConcurrentHashMap<Long, List<CoarseNode>> chunks = new ConcurrentHashMap<>();
 
+    /** A graph of the given nodes as they are; edges are not made to share their targets' id instances. */
     public static CoarseGraph of(Map<Long, List<CoarseNode>> source) {
         CoarseGraph graph = new CoarseGraph();
         source.forEach((key, nodes) -> graph.chunks.put(key, List.copyOf(nodes)));
@@ -78,19 +79,23 @@ public final class CoarseGraph {
             List<ComponentId> edges = new ArrayList<>();
             for (ComponentId edge : node.edges()) {
                 Side side = node.sideOf(edge);
-                if (side != null && recomputedSides.contains(side) && node(edge) != null) {
-                    edges.add(edge);
+                ComponentId target = side != null && recomputedSides.contains(side) ? canonical(edge) : null;
+                if (target != null) {
+                    edges.add(target);
                 }
             }
             if (previous != null) {
                 for (ComponentId edge : previous.edges()) {
                     Side side = previous.sideOf(edge);
-                    if (side != null && !recomputedSides.contains(side) && node(edge) != null) {
-                        edges.add(edge);
+                    ComponentId target = side != null && !recomputedSides.contains(side) ? canonical(edge) : null;
+                    if (target != null) {
+                        edges.add(target);
                     }
                 }
             }
-            rebuilt.add(new CoarseNode(node.id(), node.minY(), node.maxY(), edges));
+            // Keeping the old instance keeps the neighbours' edges to this node canonical.
+            ComponentId id = previous != null ? previous.id() : node.id();
+            rebuilt.add(new CoarseNode(id, node.minY(), node.maxY(), edges));
         }
         chunks.put(ChunkKeys.key(chunkX, chunkZ), List.copyOf(rebuilt));
 
@@ -121,6 +126,15 @@ public final class CoarseGraph {
             }
             chunks.put(ChunkKeys.key(nx, nz), List.copyOf(updated));
         }
+    }
+
+    /**
+     * The id instance of the existing node equal to {@code id}, or null when there is none. Edges
+     * hold that instance rather than an equal copy, so an edge costs a reference and no object.
+     */
+    private ComponentId canonical(ComponentId id) {
+        CoarseNode node = node(id);
+        return node == null ? null : node.id();
     }
 
     private static boolean hasEdgeBack(List<CoarseNode> nodes, ComponentId target, ComponentId source) {
