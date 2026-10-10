@@ -37,7 +37,7 @@ destination, and the whole way for `/gps` and `/compass`. Rides between stops ge
 - While a route is only partly known, the boss bar shows `~` before the distance (add `<approx>`
   to a custom `bossbar-format` to get this).
 - When the route is extended or re-planned, the new route keeps you going the way you were headed
-  unless turning back saves a lot. The search only sees about 80 blocks ahead, so along a river or
+  unless turning back saves a lot. The search only sees about 80 blocks in each direction, so along a river or
   wall it may follow the bank for a while before finding the crossing.
 - If no route can be found nearby, you get one message and the straight arrow, and it retries as
   you move.
@@ -45,18 +45,18 @@ destination, and the whole way for `/gps` and `/compass`. Rides between stops ge
 Configure it under `walking-paths:` in `config.yml`; `enabled: false` restores the plain arrow.
 
 ### Whole-world routing
-The search window only sees about 160 blocks, so it cannot know where a river has a bridge or
+The search window only sees about 80 blocks in each direction, so it cannot know where a river has a bridge or
 where a wall ends. The optional whole-world graph records how the walkable parts of each chunk
 connect. With it, routes head for bridges and gaps the window cannot see.
 
 - Build it with `/directions walk build <world>` (permission `directions.debug`). It runs in the
   background. Check progress with `/directions debug walk`. A city the size of Reveille takes about
-  an hour at the default rate. `/directions walk build stop` stops it and saves progress. A later
-  build, or a restart, resumes where it stopped.
+  an hour at the default rate. `/directions walk build stop` stops it and saves progress. Running
+  `/directions walk build <world>` again, even after a restart, resumes where it stopped.
 - The graph is saved in `plugins/Directions/walk/`, one `.coarse` file per world. It loads in the
   background on startup.
 - It stays current by itself. Each chunk the trail reads updates that chunk in the graph, so
-  WorldEdit changes appear within five minutes.
+  WorldEdit changes appear within five minutes once a player's trail loads that chunk again.
 - Without a graph, or with `coarse.enabled: false`, routing works as before: the window search
   with the turn-back penalty.
 

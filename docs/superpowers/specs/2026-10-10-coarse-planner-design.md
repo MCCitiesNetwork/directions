@@ -42,6 +42,7 @@ look crossable).
 
 ```
 walk/
+├── CellSetGoal                  (walk/, not coarse/) a goal that is an explicit set of cells, the waypoint goal for the window search
 ├── coarse/                      pure Java, no Bukkit imports (covered by WalkPackagePurityTest)
 │   ├── ChunkComponents          components of one chunk from its surfaces and the walking rules
 │   ├── ComponentId              a node's identity: chunk and representative cell
