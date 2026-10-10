@@ -2,12 +2,14 @@ package com.minecraftcitiesnetwork.directions.walk.coarse;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.minecraftcitiesnetwork.directions.walk.PointGoal;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -71,7 +73,7 @@ class CoarseSearchTest {
         assertEquals(9, found.path().size());
         assertEquals(id(0, 0), found.path().get(0));
         assertEquals(id(4, 4), found.path().get(8));
-        assertEquals(true, found.path().contains(id(2, 0)));
+        assertTrue(found.path().contains(id(2, 0)));
         assertEquals(8 * 16.0, found.length(), 1e-9);
     }
 
@@ -114,8 +116,58 @@ class CoarseSearchTest {
             assertInstanceOf(CoarseSearch.Found.class, result);
             if (first == null) {
                 first = result;
+                // (1,0) and (0,1) tie on f and h: the lower chunkX, (0,1), is expanded first and wins the route.
+                assertEquals(List.of(id(0, 0), id(0, 1), id(1, 1), id(1, 2), id(2, 2)),
+                        ((CoarseSearch.Found) result).path());
             }
             assertEquals(first, result);
         }
+    }
+
+    private static CoarseNode node(ComponentId id, ComponentId... edges) {
+        return new CoarseNode(id, id.y(), id.y(), List.of(edges));
+    }
+
+    private static CoarseGraph handBuilt(CoarseNode... nodes) {
+        Map<Long, List<CoarseNode>> source = new java.util.HashMap<>();
+        for (CoarseNode n : nodes) {
+            source.computeIfAbsent(ChunkKeys.key(n.id().chunkX(), n.id().chunkZ()), k -> new ArrayList<>()).add(n);
+        }
+        return CoarseGraph.of(source);
+    }
+
+    @Test
+    void skipsAnEdgeWhoseTargetIsMissing() {
+        ComponentId a = id(0, 0);
+        ComponentId b = id(1, 0);
+        ComponentId c = id(2, 0);
+        ComponentId ghost = id(1, 1); // in goals and nearest to the goal point, but not in the graph
+        CoarseGraph graph = handBuilt(node(a, ghost, b), node(b, a, c), node(c, b));
+        CoarseSearch.Result result = CoarseSearch.search(graph, a, Set.of(ghost, c), goalAt(ghost), 1000);
+        CoarseSearch.Found found = assertInstanceOf(CoarseSearch.Found.class, result);
+        assertEquals(List.of(a, b, c), found.path());
+        assertEquals(32.0, found.length(), 1e-9);
+    }
+
+    @Test
+    void prefersTheCheaperRouteOverTheFewerHops() {
+        ComponentId a = id(0, 0);
+        ComponentId x = id(1, 0);
+        ComponentId y = id(2, 0);
+        ComponentId g = id(3, 0);
+        ComponentId high = new ComponentId(1, 1, 24, 164, 24); // two hops via a peak 100 blocks up
+        CoarseGraph graph = handBuilt(
+                node(a, x, high), node(x, a, y), node(y, x, g), node(g, y, high), node(high, a, g));
+        CoarseSearch.Found found = assertInstanceOf(CoarseSearch.Found.class,
+                CoarseSearch.search(graph, a, Set.of(g), goalAt(g), 1000));
+        assertEquals(List.of(a, x, y, g), found.path());
+        assertEquals(48.0, found.length(), 1e-9);
+    }
+
+    @Test
+    void budgetBoundaryIsExact() {
+        // Expanding the start, two middles and the goal takes four expansions.
+        assertInstanceOf(CoarseSearch.Found.class, run(line(4), id(0, 0), id(3, 0), 4));
+        assertEquals(CoarseSearch.Failure.BUDGET, run(line(4), id(0, 0), id(3, 0), 3));
     }
 }
