@@ -126,6 +126,24 @@ class GuideSimulationTest {
                 "should not have walked into the dead end, max x " + maxXOnFirstRoad + ": " + report);
     }
 
+    /**
+     * The goal lies just past the river, so the bridge (z 120..127) is a little outside the first
+     * window: the coarse path leaves the window to reach it and comes back in on the far bank. The
+     * waypoint must be on the near side, where the path first leaves the window.
+     */
+    @Test
+    void withTheGraphABridgeJustOutsideTheWindowIsReached() {
+        Goal acrossTheRiver = new PointGoal(360, 64, 4, 3, false);
+        for (double startX : new double[] {250.5, 290.5}) {
+            Report report = WalkSimulation.walk(RIVER_WITH_BRIDGE, FULL_WINDOW, startX, START_Z, acrossTheRiver,
+                    SECONDS, true);
+            String context = "start x " + startX + ": " + report;
+            assertTrue(report.arrived(), context);
+            assertEquals(0, report.reversals(), context);
+            assertTrue(report.guidedRoutes() > 0, context);
+        }
+    }
+
     private static Report walk(City city, int window, boolean coarse) {
         return WalkSimulation.walk(city, window, START_X, START_Z, FAR_EAST, SECONDS, coarse);
     }

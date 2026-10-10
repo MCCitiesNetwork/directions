@@ -39,6 +39,30 @@ class WaypointsTest {
     }
 
     @Test
+    void stopsWhereThePathFirstLeavesTheWindow() {
+        // Out across the window's south edge (z 24) at chunk 2 and back in at chunk 3, as a path to a
+        // bridge just outside the window does: the waypoint must stay on the near side.
+        List<ComponentId> path = new ArrayList<>(List.of(chunk(0), chunk(1), chunk(2)));
+        path.add(new ComponentId(2, 2, 40, 65, 40));
+        path.add(new ComponentId(3, 2, 56, 65, 40));
+        path.add(chunk(3));
+        path.add(chunk(4));
+        assertEquals(chunk(2), Waypoints.pick(path, WINDOW, CAPTURED));
+    }
+
+    @Test
+    void stopsAtTheFirstUncapturedChunkEvenIfLaterOnesAreCaptured() {
+        Terrain chunkTwoUnknown = (x, z) -> (x >> 4) == 2 ? null : new int[0];
+        assertEquals(chunk(1), Waypoints.pick(path(), WINDOW, chunkTwoUnknown));
+    }
+
+    @Test
+    void theStartMayStraddleTheWindowEdge() {
+        List<ComponentId> path = List.of(new ComponentId(-1, 0, -8, 65, 8), chunk(0), chunk(1));
+        assertEquals(chunk(1), Waypoints.pick(path, WINDOW, CAPTURED));
+    }
+
+    @Test
     void nullWhenOnlyTheStartQualifies() {
         assertNull(Waypoints.pick(path(), new Window(-8, -8, 24, 24), CAPTURED));
     }

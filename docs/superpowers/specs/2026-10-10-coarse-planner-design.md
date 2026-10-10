@@ -78,9 +78,13 @@ walk/
   `NO_PATH`, or `BUDGET`. Edge cost is the straight-line distance between representative cells; the
   heuristic is `goal.estimate` at the representative cell, which is admissible because every cell of
   the goal lies at least that far away. Deterministic tie-breaking as in `WindowSearch`.
-- **`Waypoints`**: `pick(path, window, Terrain) → ComponentId or null`: the last node on the path
-  whose chunk lies entirely inside the window and whose columns are captured. Null when that is the
-  start node, in which case the coarse layer has nothing to add.
+- **`Waypoints`**: `pick(path, window, Terrain) → ComponentId or null`: the last node of the path's
+  *leading run* of nodes whose chunk lies entirely inside the window and whose representative column
+  is captured. The run starts at the start node, which always counts even when its chunk straddles
+  the window's edge, and ends at the first node that is outside the window or not captured. A path
+  that leaves the window and comes back in (to a bridge just outside it) therefore never yields a
+  waypoint on the far side of the obstacle. Null when the run is the start node alone, in which case
+  the coarse layer has nothing to add.
 - **`RegionHeaders`**: `chunksIn(Path regionFile) → List<ChunkPos>`: parses the file name for the
   region position and the first 4 KB for non-zero offsets. No NBT, no decompression.
 - **`CoarseGraphCodec`**: `write(graph, progress, OutputStream)` and `read(InputStream)`. See §7.
@@ -99,7 +103,7 @@ walk/
       height range overlaps the goal's. Region goals use their region's box; `PointGoal` uses its
       radius; a goal without a height uses the world's full range. Empty (goal area not built) → step 3.
    c. `CoarseSearch` with `coarse.max-expansions`. `NO_PATH` or `BUDGET` → step 3.
-   d. `Waypoints.pick`. Null → step 3.
+   d. `Waypoints.pick`: the last node of the path's leading run of in-window, captured nodes. Null → step 3.
    e. Flood the waypoint chunk from the waypoint's representative cell to collect the component's
       cells, and run the window search with a `CellSetGoal` of those cells, exits NONE. `COMPLETE` →
       return it as `PARTIAL`, with `endEstimate` = the coarse path length from the waypoint to the
@@ -235,7 +239,8 @@ Lang keys (`walk.` section): `build-started`, `build-resumed`, `build-stopped`, 
   sequence of replacements; unknown sides keep old edges.
 - `CoarseSearch`: finds the shortest path on a hand-built graph; `NO_PATH` across a gap; `BUDGET` at
   the cap; deterministic.
-- `Waypoints`: picks the last in-window captured node; null when only the start is inside.
+- `Waypoints`: picks the last node of the leading in-window captured run; a path that leaves the
+  window and re-enters stops where it first leaves; null when only the start is inside.
 - `RegionHeaders`: a fabricated header with a known set of offsets lists exactly those chunks;
   parses negative region coordinates from file names.
 - `CoarseGraphCodec`: round trip of a graph with progress; a truncated stream fails cleanly.
