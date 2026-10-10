@@ -17,7 +17,8 @@
 - Search budgets unchanged: window search `time-budget-ms` 50 and `max-expansions` 200,000; coarse search `coarse.max-expansions` default 50,000, range 1,000 to 1,000,000.
 - `coarse.build-chunks-per-tick` default 4, range 1 to 32.
 - Graph file: `plugins/Directions/walk/<world UUID>.coarse`, gzip, magic `DCG1`, version 1, written to a temporary file then renamed. Big-endian (`DataOutputStream`); the spec is amended to say so in Task 7.
-- Representative cell of a component: the walkable cell nearest the chunk's horizontal centre (`chunkX * 16 + 8`, `chunkZ * 16 + 8`, measured from cell centres), lowest `Cell.key` on ties.
+- Representative cell of a component: the walkable cell nearest the chunk's horizontal centre (`chunkX * 16 + 8`, `chunkZ * 16 + 8`, measured from the cell's integer x and z), lowest `Cell.key` on ties.
+- `WalkPackagePurityTest` walks `walk/` recursively but skips `walk/bukkit`, which legitimately imports Bukkit.
 - Edge cost: 3D straight-line distance between representative cells. Heuristic: `Goal.estimate` at the representative cell.
 - All commits authored as Technofied, ending with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. No pull request; everything lands on `feature/walking-trails`.
 - Nothing under `sample-data/`, `run/` or `run-smoke/` is ever staged.
