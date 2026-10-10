@@ -17,6 +17,8 @@ class GuideSimulationTest {
     private static final double START_X = 3.5;
     private static final double START_Z = 4.5;
     private static final Goal FAR_EAST = new PointGoal(1000, 64, 4, 3, false);
+    /** On the parallel road of {@link #DEAD_END_WITH_BRANCH}, so the coarse graph has goal nodes. */
+    private static final Goal PARALLEL_ROAD = new PointGoal(1000, 64, 204, 3, false);
     private static final double SECONDS = 400;
     private static final boolean[] MODES = {false, true};
 
@@ -77,6 +79,7 @@ class GuideSimulationTest {
         }
     }
 
+    // With the graph the goal area has no walkable cells, so there is no coarse plan and the walk falls back to the penalty behaviour.
     @Test
     void deadEndTurnsThePlayerBackOnceAndTakesTheBranch() {
         for (boolean coarse : MODES) {
@@ -93,15 +96,20 @@ class GuideSimulationTest {
         Report report = walk(RIVER_WITH_BRIDGE, FULL_WINDOW, true);
         assertTrue(report.arrived(), report.toString());
         assertEquals(0, report.reversals(), report.toString());
-        assertTrue(report.minZ() >= -20, "should not have followed the bank away from the bridge: " + report);
+        double minZ = report.trail().stream().mapToDouble(p -> p[1]).min().orElseThrow();
+        assertTrue(minZ >= -20, "should not have followed the bank away from the bridge, min z " + minZ + ": " + report);
     }
 
     @Test
     void withTheGraphTheDeadEndIsNeverEntered() {
-        Report report = walk(DEAD_END_WITH_BRANCH, FULL_WINDOW, true);
+        Report report = WalkSimulation.walk(DEAD_END_WITH_BRANCH, FULL_WINDOW, START_X, START_Z, PARALLEL_ROAD,
+                SECONDS, true);
+        assertTrue(report.arrived(), report.toString());
         assertEquals(0, report.reversals(), report.toString());
-        assertTrue(report.maxX() < 150, "should not have walked into the dead end: " + report);
-        assertTrue(report.z() >= 200, "should have reached the parallel road: " + report);
+        double maxXOnFirstRoad = report.trail().stream().filter(p -> p[1] < 100).mapToDouble(p -> p[0]).max()
+                .orElseThrow();
+        assertTrue(maxXOnFirstRoad < 150,
+                "should not have walked into the dead end, max x " + maxXOnFirstRoad + ": " + report);
     }
 
     private static Report walk(City city, int window, boolean coarse) {

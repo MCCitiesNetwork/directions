@@ -8,6 +8,7 @@ import com.minecraftcitiesnetwork.directions.walk.coarse.CoarseNode;
 import com.minecraftcitiesnetwork.directions.walk.coarse.Component;
 import com.minecraftcitiesnetwork.directions.walk.coarse.GuidedSearch;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -32,11 +33,16 @@ final class WalkSimulation {
      * @param noRouteResults searches that found nothing while the player had a route to follow
      * @param arrived       whether the player reached the goal within the time
      * @param guidedRoutes  routes found that lead to a waypoint chosen with the coarse graph
-     * @param minZ          the player's smallest z over the walk
-     * @param maxX          the player's largest x over the walk
+     * @param trail         the player's (x, z) once per simulated second, from the start position
      */
     record Report(int routes, int reversals, int noRouteResults, boolean arrived, double x, double z,
-                  int guidedRoutes, double minZ, double maxX) {
+                  int guidedRoutes, List<double[]> trail) {
+        @Override
+        public String toString() {
+            return "Report[routes=" + routes + ", reversals=" + reversals + ", noRouteResults=" + noRouteResults
+                    + ", arrived=" + arrived + ", x=" + x + ", z=" + z + ", guidedRoutes=" + guidedRoutes
+                    + ", trail=" + trail.size() + " samples]";
+        }
     }
 
     private static final int VIEW_DISTANCE_BLOCKS = 128;
@@ -117,12 +123,14 @@ final class WalkSimulation {
         int reversals = 0;
         int noRouteResults = 0;
         int guidedRoutes = 0;
-        double minZ = z;
-        double maxX = x;
+        List<double[]> trail = new ArrayList<>();
         GuidePolicy.SearchOrder pendingOrder = null;
         SearchResult pendingResult = null;
         long resultDue = 0;
         for (long now = 0; now < seconds * 1000; now += TICK_MILLIS) {
+            if (now % 1000 == 0) {
+                trail.add(new double[] {x, z});
+            }
             captureAround(x, z);
             if (pendingResult != null && now >= resultDue) {
                 Route before = policy.route();
@@ -168,13 +176,11 @@ final class WalkSimulation {
                 x += dx / distance * step;
                 z += dz / distance * step;
             }
-            minZ = Math.min(minZ, z);
-            maxX = Math.max(maxX, x);
             if (goal.contains((int) Math.floor(x), FEET_Y, (int) Math.floor(z))) {
-                return new Report(routes, reversals, noRouteResults, true, x, z, guidedRoutes, minZ, maxX);
+                return new Report(routes, reversals, noRouteResults, true, x, z, guidedRoutes, trail);
             }
         }
-        return new Report(routes, reversals, noRouteResults, false, x, z, guidedRoutes, minZ, maxX);
+        return new Report(routes, reversals, noRouteResults, false, x, z, guidedRoutes, trail);
     }
 
     private void captureAround(double x, double z) {
