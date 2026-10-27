@@ -1,6 +1,7 @@
 .gradle/
 build/
 out/
+bin/
 
 # IntelliJ / IDEA
 .idea/
@@ -27,3 +28,11 @@ replay_pid*
 
 # workspace files
 .code-workspace
+
+# Local test servers
+run/
+run-smoke/
+
+# Live server data (Reveille world, regions, configs) - never commit
+sample-data/
+*.grid.gz
