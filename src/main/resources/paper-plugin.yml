@@ -1,7 +1,7 @@
 name: Directions
 version: ${version}
 main: com.minecraftcitiesnetwork.directions.DirectionsPlugin
-api-version: "1.21"
+api-version: "26.3"
 description: Transit directions between WorldGuard regions
 authors: [MinecraftCitiesNetwork]
 
@@ -10,6 +10,10 @@ dependencies:
     WorldGuard:
       required: true
       load: BEFORE
+    packetevents:
+      required: true
+      load: BEFORE
+      join-classpath: true
 
 permissions:
   directions.use:

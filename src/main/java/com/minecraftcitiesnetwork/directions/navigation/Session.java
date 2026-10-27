@@ -2,7 +2,8 @@ package com.minecraftcitiesnetwork.directions.navigation;
 
 import com.minecraftcitiesnetwork.directions.DirectionsPlugin;
 import org.bukkit.boss.BossBar;
-import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.ItemDisplay;
+import org.bukkit.util.Vector;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -13,18 +14,19 @@ final class Session implements SessionView {
     private final UUID playerId;
     private final List<Waypoint> waypoints;
     private int index;
-    private final List<ArmorStand> arrowStands;
+    private final List<ItemDisplay> arrowBlocks;
     private final BossBar bossBar;
     private final boolean gps;
     private double legStartDistance;
     private int upcomingHintSentForIndex;
+    private @Nullable Vector arrowPointing;
 
-    Session(DirectionsPlugin plugin, UUID playerId, List<Waypoint> waypoints, int index, List<ArmorStand> arrowStands, BossBar bossBar, boolean gps) {
+    Session(DirectionsPlugin plugin, UUID playerId, List<Waypoint> waypoints, int index, List<ItemDisplay> arrowBlocks, BossBar bossBar, boolean gps) {
         this.plugin = plugin;
         this.playerId = playerId;
         this.waypoints = waypoints;
         this.index = index;
-        this.arrowStands = arrowStands;
+        this.arrowBlocks = arrowBlocks;
         this.bossBar = bossBar;
         this.gps = gps;
         this.legStartDistance = -1.0;
@@ -43,8 +45,17 @@ final class Session implements SessionView {
         return plugin;
     }
 
-    List<ArmorStand> arrowStands() {
-        return arrowStands;
+    List<ItemDisplay> arrowBlocks() {
+        return arrowBlocks;
+    }
+
+    /** Which way the arrow points now, or null before it is first drawn. */
+    @Nullable Vector arrowPointing() {
+        return arrowPointing;
+    }
+
+    void setArrowPointing(Vector arrowPointing) {
+        this.arrowPointing = arrowPointing;
     }
 
     BossBar bossBar() {
